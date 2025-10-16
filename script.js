@@ -42,22 +42,45 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Load from IndexedDB
     await loadFromStorage();
     
-    // Try to load from cloud first
+    // Try to load from cloud first (priority over local data)
     if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
-        showSyncStatus('Loading from cloud...', 'info');
-        const cloudData = await gistStorage.load();
-        if (cloudData && cloudData.length > 0) {
-            // Use cloud data if available and newer
-            if (cloudData.length >= applications.length) {
-                applications = cloudData;
-                await idbStorage.saveAll(applications);
-                showSyncStatus('Data loaded from cloud!', 'success');
+        showSyncStatus('Syncing with cloud...', 'info');
+        try {
+            const cloudData = await gistStorage.load();
+            if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
+                // Always prefer cloud data (for cross-device sync)
+                console.log(`Cloud: ${cloudData.length} apps, Local: ${applications.length} apps`);
+                
+                // Use cloud data if it has more or equal applications
+                if (cloudData.length >= applications.length) {
+                    applications = cloudData;
+                    await idbStorage.saveAll(applications);
+                    showSyncStatus(`✓ Loaded ${cloudData.length} apps from cloud`, 'success');
+                } else {
+                    // Local has more, push to cloud
+                    await gistStorage.save(applications);
+                    showSyncStatus(`✓ Uploaded ${applications.length} apps to cloud`, 'success');
+                }
+            } else if (applications.length > 0) {
+                // No cloud data, push local to cloud
+                console.log('No cloud data, uploading local data...');
+                await gistStorage.save(applications);
+                showSyncStatus(`✓ Uploaded ${applications.length} apps to cloud`, 'success');
             }
+        } catch (error) {
+            console.error('Cloud sync error:', error);
+            showSyncStatus('⚠ Cloud sync unavailable', 'warning');
         }
-        // Start auto-sync
-        gistStorage.startAutoSync(() => {
+        
+        // Start auto-sync every 30 seconds
+        gistStorage.startAutoSync(async () => {
             if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
-                gistStorage.save(applications);
+                try {
+                    await gistStorage.save(applications);
+                    console.log('Auto-synced to cloud');
+                } catch (error) {
+                    console.error('Auto-sync failed:', error);
+                }
             }
         });
     }
@@ -749,7 +772,7 @@ function formatStatus(status) {
     return statusMap[status] || status;
 }
 
-// Save to localStorage
+// Save to IndexedDB and Cloud
 async function saveToLocalStorage() {
     try {
         // Save to IndexedDB (supports 1GB+)
@@ -757,20 +780,26 @@ async function saveToLocalStorage() {
         
         const dataStr = JSON.stringify(applications);
         const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
-        console.log(`Data saved to IndexedDB: ${applications.length} applications, ${sizeInMB}MB`);
+        console.log(`✓ Saved to IndexedDB: ${applications.length} applications, ${sizeInMB}MB`);
         
         // Update storage display
         updateStorageStatus();
         
-        // Also save to cloud if enabled
+        // Immediately sync to cloud if enabled (for cross-device access)
         if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
-            gistStorage.save(applications).then(success => {
+            showSyncStatus('Syncing to cloud...', 'info');
+            try {
+                const success = await gistStorage.save(applications);
                 if (success) {
-                    showSyncStatus('Synced to cloud', 'success');
+                    showSyncStatus('✓ Synced to cloud!', 'success');
+                    console.log('✓ Synced to GitHub Gist');
+                } else {
+                    showSyncStatus('⚠ Cloud sync failed', 'warning');
                 }
-            }).catch(err => {
+            } catch (err) {
                 console.error('Cloud sync failed:', err);
-            });
+                showSyncStatus('⚠ Cloud sync error', 'warning');
+            }
         }
     } catch (error) {
         showNotification('Failed to save data: ' + error.message, 'error');
