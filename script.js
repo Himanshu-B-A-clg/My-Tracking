@@ -874,3 +874,20 @@ function showNotification(message, type) {
         }, 400);
     }, 3000);
 }
+
+// Export functions to window for onclick handlers
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.saveApplication = saveApplication;
+window.editApplication = editApplication;
+window.deleteApplication = deleteApplication;
+window.viewApplication = viewApplication;
+window.viewFiles = viewFiles;
+window.downloadFile = downloadFile;
+window.deleteFile = deleteFile;
+window.removeFile = removeFile;
+window.exportToCSV = exportToCSV;
+window.exportToPDF = exportToPDF;
+window.exportData = exportData;
+window.importData = importData;
+window.filterApplications = filterApplications;
