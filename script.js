@@ -1,11 +1,48 @@
 // Application data storage
-let applications = JSON.parse(localStorage.getItem('applications')) || [];
+let applications = [];
+
+// Load fresh data from localStorage
+function loadFromStorage() {
+    try {
+        const stored = localStorage.getItem('applications');
+        applications = stored ? JSON.parse(stored) : [];
+        console.log('Loaded applications from storage:', applications.length);
+    } catch (error) {
+        console.error('Error loading from storage:', error);
+        applications = [];
+    }
+}
+
+// Initialize fresh load
+loadFromStorage();
 
 // Initialize the application
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    // Reload fresh data on page load
+    loadFromStorage();
+    
+    // Try to load from cloud first
+    if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
+        showSyncStatus('Loading from cloud...', 'info');
+        const cloudData = await gistStorage.load();
+        if (cloudData && cloudData.length > 0) {
+            // Use cloud data if available
+            applications = cloudData;
+            saveToLocalStorage();
+            showSyncStatus('Data loaded from cloud!', 'success');
+        }
+        // Start auto-sync
+        gistStorage.startAutoSync(() => {
+            if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
+                gistStorage.save(applications);
+            }
+        });
+    }
+    
     loadApplications();
     updateStats();
     setDefaultDate();
+    initializeFileUpload();
 });
 
 // Set default date to today
@@ -20,6 +57,8 @@ function openModal() {
     document.getElementById('modalTitle').textContent = 'Add New Application';
     document.getElementById('applicationForm').reset();
     document.getElementById('editIndex').value = '';
+    document.getElementById('fileList').innerHTML = '';
+    document.body.style.overflow = 'hidden'; // Prevent background scroll
     setDefaultDate();
 }
 
@@ -27,6 +66,8 @@ function openModal() {
 function closeModal() {
     document.getElementById('applicationModal').style.display = 'none';
     document.getElementById('applicationForm').reset();
+    document.getElementById('fileList').innerHTML = '';
+    document.body.style.overflow = 'auto'; // Restore background scroll
 }
 
 // Close modal when clicking outside
@@ -37,22 +78,93 @@ window.onclick = function(event) {
     }
 }
 
+// Initialize file upload handler
+function initializeFileUpload() {
+    const fileUploadElement = document.getElementById('fileUpload');
+    if (fileUploadElement) {
+        fileUploadElement.addEventListener('change', function(e) {
+            const fileList = document.getElementById('fileList');
+            const files = Array.from(e.target.files);
+            
+            if (files.length > 0) {
+                fileList.innerHTML = files.map((file, index) => `
+                    <div class="file-item">
+                        <i class="fas fa-file-alt"></i>
+                        <span>${file.name}</span>
+                        <button type="button" class="remove-file-btn" onclick="removeFile(${index})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `).join('');
+            } else {
+                fileList.innerHTML = '';
+            }
+        });
+    }
+}
+
+// Remove file from upload
+function removeFile(index) {
+    const fileInput = document.getElementById('fileUpload');
+    if (!fileInput || !fileInput.files) return;
+    
+    try {
+        const dt = new DataTransfer();
+        const files = Array.from(fileInput.files);
+        
+        files.forEach((file, i) => {
+            if (i !== index) dt.items.add(file);
+        });
+        
+        fileInput.files = dt.files;
+        
+        // Trigger change event to update display
+        const event = new Event('change');
+        fileInput.dispatchEvent(event);
+    } catch (error) {
+        console.error('Error removing file:', error);
+        showNotification('Could not remove file', 'error');
+    }
+}
+
 // Save application
-function saveApplication(event) {
+async function saveApplication(event) {
     event.preventDefault();
     
     const companyName = document.getElementById('companyName').value;
     const dateApplied = document.getElementById('dateApplied').value;
     const status = document.getElementById('status').value;
-    const requirements = document.getElementById('requirements').value;
+    const description = document.getElementById('description').value;
     const editIndex = document.getElementById('editIndex').value;
+    const fileInput = document.getElementById('fileUpload');
+    
+    // Handle file uploads
+    let uploadedFiles = [];
+    if (editIndex !== '') {
+        // Keep existing files if editing
+        uploadedFiles = applications[editIndex].files || [];
+    }
+    
+    // Add new files
+    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+        try {
+            const newFiles = await Promise.all(
+                Array.from(fileInput.files).map(file => convertFileToBase64(file))
+            );
+            uploadedFiles = [...uploadedFiles, ...newFiles];
+        } catch (error) {
+            console.error('Error uploading files:', error);
+            showNotification('Some files could not be uploaded', 'warning');
+        }
+    }
     
     const application = {
         id: editIndex ? applications[editIndex].id : Date.now(),
         companyName,
         dateApplied,
         status,
-        requirements
+        description,
+        files: uploadedFiles
     };
     
     if (editIndex !== '') {
@@ -69,6 +181,30 @@ function saveApplication(event) {
     loadApplications();
     updateStats();
     closeModal();
+}
+
+// Convert file to base64 for storage
+function convertFileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        // Check file size (max 5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (file.size > maxSize) {
+            reject(new Error(`File "${file.name}" is too large. Maximum size is 5MB.`));
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = () => {
+            resolve({
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                data: reader.result
+            });
+        };
+        reader.onerror = () => reject(new Error(`Failed to read file "${file.name}"`));
+        reader.readAsDataURL(file);
+    });
 }
 
 // Load applications
@@ -93,9 +229,11 @@ function loadApplications() {
             <td><strong>${app.companyName}</strong></td>
             <td>${formatDate(app.dateApplied)}</td>
             <td><span class="status-badge status-${app.status}">${formatStatus(app.status)}</span></td>
-            <td>${app.requirements || 'N/A'}</td>
             <td>
                 <div class="action-btns">
+                    <button class="btn-icon btn-success" onclick="viewApplication(${index})" title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
                     <button class="btn-icon btn-info" onclick="editApplication(${index})" title="Edit">
                         <i class="fas fa-edit"></i>
                     </button>
@@ -108,6 +246,200 @@ function loadApplications() {
     });
 }
 
+// View application details modal
+function viewApplication(index) {
+    const app = applications[index];
+    if (!app) {
+        showNotification('Application not found!', 'error');
+        return;
+    }
+    
+    const filesHTML = app.files && app.files.length > 0 
+        ? app.files.map((file, fileIndex) => `
+            <div class="file-view-item">
+                <div class="file-icon">
+                    <i class="fas fa-file-${getFileIcon(file.type)}"></i>
+                </div>
+                <div class="file-info">
+                    <h4>${file.name}</h4>
+                    <p>${formatFileSize(file.size)}</p>
+                </div>
+                <div class="file-actions">
+                    <button class="btn btn-primary" onclick="downloadFile(${index}, ${fileIndex})">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                    <button class="btn btn-danger" onclick="deleteFile(${index}, ${fileIndex})">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+        `).join('')
+        : '<p class="no-files-msg"><i class="fas fa-info-circle"></i> No files attached</p>';
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-eye"></i> Application Details</h2>
+                <span class="close" onclick="this.closest('.modal').remove(); document.body.style.overflow='auto';">&times;</span>
+            </div>
+            <div class="view-details-container">
+                <div class="detail-row">
+                    <strong><i class="fas fa-building"></i> Company Name:</strong>
+                    <span>${app.companyName}</span>
+                </div>
+                <div class="detail-row">
+                    <strong><i class="fas fa-calendar"></i> Date Applied:</strong>
+                    <span>${formatDate(app.dateApplied)}</span>
+                </div>
+                <div class="detail-row">
+                    <strong><i class="fas fa-info-circle"></i> Status:</strong>
+                    <span class="status-badge status-${app.status}">${formatStatus(app.status)}</span>
+                </div>
+                <div class="detail-row">
+                    <strong><i class="fas fa-align-left"></i> Description:</strong>
+                    <p class="description-text">${app.description || app.requirements || 'No description provided'}</p>
+                </div>
+                <div class="detail-row">
+                    <strong><i class="fas fa-paperclip"></i> Attached Files (${app.files ? app.files.length : 0}):</strong>
+                </div>
+                <div class="files-view-container">
+                    ${filesHTML}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+    
+    // Close on outside click
+    modal.onclick = function(e) {
+        if (e.target === modal) {
+            modal.remove();
+            document.body.style.overflow = 'auto';
+        }
+    };
+}
+
+// View files modal (keeping for backward compatibility)
+function viewFiles(index) {
+    const app = applications[index];
+    if (!app || !app.files || app.files.length === 0) {
+        showNotification('No files attached!', 'warning');
+        return;
+    }
+    
+    const filesHTML = app.files.map((file, fileIndex) => `
+        <div class="file-view-item">
+            <div class="file-icon">
+                <i class="fas fa-file-${getFileIcon(file.type)}"></i>
+            </div>
+            <div class="file-info">
+                <h4>${file.name}</h4>
+                <p>${formatFileSize(file.size)}</p>
+            </div>
+            <div class="file-actions">
+                <button class="btn btn-primary" onclick="downloadFile(${index}, ${fileIndex})">
+                    <i class="fas fa-download"></i> Download
+                </button>
+                <button class="btn btn-danger" onclick="deleteFile(${index}, ${fileIndex})">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    `).join('');
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-folder-open"></i> Files - ${app.companyName}</h2>
+                <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+            </div>
+            <div class="files-view-container">
+                ${filesHTML}
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close on outside click
+    modal.onclick = function(e) {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    };
+}
+
+// Download uploaded file from application
+function downloadFile(appIndex, fileIndex) {
+    try {
+        const file = applications[appIndex].files[fileIndex];
+        if (!file || !file.data) {
+            showNotification('File not found!', 'error');
+            return;
+        }
+        const link = document.createElement('a');
+        link.href = file.data;
+        link.download = file.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showNotification('File downloaded!', 'success');
+    } catch (error) {
+        console.error('Download error:', error);
+        showNotification('Failed to download file!', 'error');
+    }
+}
+
+// Delete file
+function deleteFile(appIndex, fileIndex) {
+    if (confirm('Are you sure you want to delete this file?')) {
+        try {
+            applications[appIndex].files.splice(fileIndex, 1);
+            saveToLocalStorage();
+            loadApplications();
+            
+            // Close and reopen modal with updated files
+            const existingModal = document.querySelector('.modal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            if (applications[appIndex].files.length > 0) {
+                viewFiles(appIndex);
+            }
+            showNotification('File deleted!', 'success');
+        } catch (error) {
+            console.error('Delete error:', error);
+            showNotification('Failed to delete file!', 'error');
+        }
+    }
+}
+
+// Get file icon based on type
+function getFileIcon(type) {
+    if (type.includes('pdf')) return 'pdf';
+    if (type.includes('word') || type.includes('document')) return 'word';
+    if (type.includes('text')) return 'alt';
+    return 'alt';
+}
+
+// Format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
 // Edit application
 function editApplication(index) {
     const app = applications[index];
@@ -115,11 +447,26 @@ function editApplication(index) {
     document.getElementById('companyName').value = app.companyName;
     document.getElementById('dateApplied').value = app.dateApplied;
     document.getElementById('status').value = app.status;
-    document.getElementById('requirements').value = app.requirements;
+    document.getElementById('description').value = app.description || app.requirements || '';
     document.getElementById('editIndex').value = index;
     document.getElementById('modalTitle').textContent = 'Edit Application';
     
+    // Clear file input but show existing files
+    document.getElementById('fileUpload').value = '';
+    const fileList = document.getElementById('fileList');
+    if (app.files && app.files.length > 0) {
+        fileList.innerHTML = `
+            <div class="existing-files-note">
+                <i class="fas fa-info-circle"></i>
+                <span>${app.files.length} existing file(s). Upload new files to add more.</span>
+            </div>
+        `;
+    } else {
+        fileList.innerHTML = '';
+    }
+    
     document.getElementById('applicationModal').style.display = 'block';
+    document.body.style.overflow = 'hidden'; // Prevent background scroll
 }
 
 // Delete application
@@ -198,7 +545,14 @@ function exportData() {
         return;
     }
     
-    const dataStr = JSON.stringify(applications, null, 2);
+    // Convert old data format if needed
+    const exportData = applications.map(app => ({
+        ...app,
+        description: app.description || app.requirements || '',
+        files: app.files || []
+    }));
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
@@ -228,14 +582,21 @@ function importData(event) {
             // Ask user if they want to merge or replace
             const shouldMerge = confirm('Do you want to MERGE with existing data?\n\nClick OK to merge\nClick Cancel to replace all data');
             
+            // Ensure all imported data has proper structure
+            const normalizedData = importedData.map(app => ({
+                ...app,
+                description: app.description || app.requirements || '',
+                files: app.files || []
+            }));
+            
             if (shouldMerge) {
                 // Merge data (avoid duplicates by ID)
                 const existingIds = new Set(applications.map(app => app.id));
-                const newApps = importedData.filter(app => !existingIds.has(app.id));
+                const newApps = normalizedData.filter(app => !existingIds.has(app.id));
                 applications = [...applications, ...newApps];
             } else {
                 // Replace all data
-                applications = importedData;
+                applications = normalizedData;
             }
             
             saveToLocalStorage();
@@ -259,13 +620,13 @@ function exportToCSV() {
         return;
     }
     
-    let csv = 'Company Name,Date Applied,Status,Requirements\n';
+    let csv = 'Company Name,Date Applied,Status\n';
     
     applications.forEach(app => {
-        csv += `"${app.companyName}","${formatDate(app.dateApplied)}","${formatStatus(app.status)}","${app.requirements || 'N/A'}"\n`;
+        csv += `"${app.companyName}","${formatDate(app.dateApplied)}","${formatStatus(app.status)}"\n`;
     });
     
-    downloadFile(csv, 'job-applications.csv', 'text/csv');
+    downloadExportFile(csv, 'job-applications.csv', 'text/csv');
     showNotification('CSV exported successfully!', 'success');
 }
 
@@ -301,14 +662,13 @@ function exportToPDF() {
     const tableData = applications.map(app => [
         app.companyName,
         formatDate(app.dateApplied),
-        formatStatus(app.status),
-        app.requirements || 'N/A'
+        formatStatus(app.status)
     ]);
     
     // Add table
     doc.autoTable({
         startY: 70,
-        head: [['Company Name', 'Date Applied', 'Status', 'Requirements']],
+        head: [['Company Name', 'Date Applied', 'Status']],
         body: tableData,
         theme: 'grid',
         headStyles: {
@@ -330,8 +690,8 @@ function exportToPDF() {
     showNotification('PDF exported successfully!', 'success');
 }
 
-// Helper function to download file
-function downloadFile(content, fileName, mimeType) {
+// Helper function to download export file (CSV, etc)
+function downloadExportFile(content, fileName, mimeType) {
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -367,6 +727,28 @@ function formatStatus(status) {
 // Save to localStorage
 function saveToLocalStorage() {
     localStorage.setItem('applications', JSON.stringify(applications));
+    
+    // Also save to cloud if enabled
+    if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
+        gistStorage.save(applications).then(success => {
+            if (success) {
+                showSyncStatus('Synced to cloud', 'success');
+            }
+        });
+    }
+}
+
+// Show sync status
+function showSyncStatus(message, type) {
+    const statusDiv = document.getElementById('syncStatus');
+    if (statusDiv) {
+        statusDiv.textContent = message;
+        statusDiv.className = `sync-status sync-${type}`;
+        statusDiv.style.display = 'block';
+        setTimeout(() => {
+            statusDiv.style.display = 'none';
+        }, 3000);
+    }
 }
 
 // Show notification

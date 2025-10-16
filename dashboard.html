@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Himanshu B A - Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-user-tie"></i>
+                <span>Himanshu B A</span>
+                <span class="date-range">Since July 2025</span>
+            </div>
+            <div class="nav-links">
+                <a href="dashboard.html" class="nav-link active">
+                    <i class="fas fa-chart-line"></i> Dashboard
+                </a>
+                <a href="index.html" class="nav-link">
+                    <i class="fas fa-tasks"></i> Manage Applications
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div>
+                <h1><i class="fas fa-chart-pie"></i> Himanshu B A - Analytics Dashboard</h1>
+                <p>Job Search Progress | Starting July 1, 2025</p>
+            </div>
+            <div class="header-actions">
+                <div class="date-display">
+                    <i class="fas fa-calendar"></i>
+                    <span id="currentDate"></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Big Stats Cards -->
+        <div class="big-stats-container">
+            <div class="big-stat-card total-card">
+                <div class="big-stat-icon">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <div class="big-stat-content">
+                    <h2 id="dashTotalApplications">0</h2>
+                    <p>Total Applications</p>
+                    <div class="stat-trend">
+                        <i class="fas fa-arrow-up"></i>
+                        <span>This month</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="big-stat-card success-card">
+                <div class="big-stat-icon">
+                    <i class="fas fa-trophy"></i>
+                </div>
+                <div class="big-stat-content">
+                    <h2 id="dashSelectedCount">0</h2>
+                    <p>Got Placed!</p>
+                    <div class="stat-percentage" id="successRate">0%</div>
+                </div>
+            </div>
+
+            <div class="big-stat-card pending-card">
+                <div class="big-stat-icon">
+                    <i class="fas fa-hourglass-half"></i>
+                </div>
+                <div class="big-stat-content">
+                    <h2 id="dashPendingCount">0</h2>
+                    <p>In Progress</p>
+                    <div class="stat-trend">
+                        <i class="fas fa-clock"></i>
+                        <span>Waiting</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="big-stat-card rejected-card">
+                <div class="big-stat-icon">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <div class="big-stat-content">
+                    <h2 id="dashRejectedCount">0</h2>
+                    <p>Rejected</p>
+                    <div class="stat-percentage" id="rejectionRate">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="charts-grid">
+            <!-- Status Distribution Chart -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3><i class="fas fa-chart-pie"></i> Application Status</h3>
+                    <p>Distribution by status</p>
+                </div>
+                <div class="chart-container">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Timeline Chart -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3><i class="fas fa-chart-line"></i> Application Timeline</h3>
+                    <p>Applications over time</p>
+                </div>
+                <div class="chart-container">
+                    <canvas id="timelineChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Success Rate Chart -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3><i class="fas fa-chart-bar"></i> Success Rate</h3>
+                    <p>Your placement statistics</p>
+                </div>
+                <div class="chart-container">
+                    <canvas id="successChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Company List -->
+            <div class="chart-card companies-card">
+                <div class="chart-header">
+                    <h3><i class="fas fa-building"></i> Recent Companies</h3>
+                    <p>Latest applications</p>
+                </div>
+                <div class="companies-list" id="companiesList">
+                    <!-- Companies will be added here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="quick-stats-section">
+            <div class="quick-stat-item">
+                <i class="fas fa-calendar-check"></i>
+                <div>
+                    <h4 id="thisWeekCount">0</h4>
+                    <p>This Week</p>
+                </div>
+            </div>
+            <div class="quick-stat-item">
+                <i class="fas fa-fire"></i>
+                <div>
+                    <h4 id="streakCount">0</h4>
+                    <p>Day Streak</p>
+                </div>
+            </div>
+            <div class="quick-stat-item">
+                <i class="fas fa-percentage"></i>
+                <div>
+                    <h4 id="responseRate">0%</h4>
+                    <p>Response Rate</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="github-gist-config.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html>

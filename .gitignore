@@ -1,0 +1,27 @@
+# Sensitive configuration files
+github-gist-config.js
+firebase-config.js
+
+# User-specific data (optional - if you don't want to sync personal data)
+# job-applications-data.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.bak
+.cache/

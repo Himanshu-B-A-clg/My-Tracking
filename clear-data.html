@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Database - Job Tracker</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+
+        .icon {
+            font-size: 4rem;
+            color: #ef4444;
+            margin-bottom: 20px;
+        }
+
+        .info {
+            background: #fef3c7;
+            border: 2px solid #fbbf24;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #92400e;
+        }
+
+        .stats {
+            background: #f3f4f6;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stats h3 {
+            color: #374151;
+            margin-bottom: 10px;
+        }
+
+        .stats p {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px;
+            font-weight: 600;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .success-msg {
+            background: #d1fae5;
+            border: 2px solid #10b981;
+            color: #065f46;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .success-msg.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <i class="fas fa-database icon"></i>
+        <h1>Clear Database</h1>
+        
+        <div class="info">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>Warning:</strong> This will permanently delete all job applications from your local database.
+        </div>
+
+        <div class="stats">
+            <h3>Current Data</h3>
+            <p id="recordCount">0</p>
+            <small>job applications stored</small>
+        </div>
+
+        <button class="btn btn-danger" onclick="clearAllData()">
+            <i class="fas fa-trash"></i> Clear All Data
+        </button>
+        <button class="btn btn-secondary" onclick="window.location.href='index.html'">
+            <i class="fas fa-arrow-left"></i> Cancel
+        </button>
+
+        <div id="successMsg" class="success-msg">
+            <i class="fas fa-check-circle"></i> Database cleared successfully! Redirecting...
+        </div>
+    </div>
+
+    <script>
+        // Load and display current count
+        function updateCount() {
+            const apps = JSON.parse(localStorage.getItem('applications')) || [];
+            document.getElementById('recordCount').textContent = apps.length;
+        }
+
+        // Clear all data
+        function clearAllData() {
+            if (confirm('Are you absolutely sure? This cannot be undone!')) {
+                localStorage.removeItem('applications');
+                localStorage.removeItem('jobTrackerBackup');
+                
+                // Show success message
+                document.getElementById('successMsg').classList.add('show');
+                updateCount();
+                
+                // Redirect after 2 seconds
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+            }
+        }
+
+        // Initialize
+        updateCount();
+    </script>
+</body>
+</html>

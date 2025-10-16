@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Sync Setup Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+        h2 {
+            color: #764ba2;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        .step {
+            background: #f9fafb;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .step-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        code {
+            background: #1f2937;
+            color: #10b981;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .code-block {
+            background: #1f2937;
+            color: #e5e7eb;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .warning {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        .success {
+            background: #d1fae5;
+            border-left: 4px solid #10b981;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        .link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .link:hover {
+            text-decoration: underline;
+        }
+        ul {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+        li {
+            margin: 8px 0;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .feature-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .feature-card h3 {
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+        .btn {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            margin: 10px 5px;
+            transition: transform 0.3s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Cloud Sync Setup Guide</h1>
+        <p>Set up FREE automatic cloud sync using GitHub Gist in just 5 minutes!</p>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h3>✅ Free Forever</h3>
+                <p>Uses GitHub - no paid services</p>
+            </div>
+            <div class="feature-card">
+                <h3>🔄 Auto-Sync</h3>
+                <p>Syncs every 30 seconds</p>
+            </div>
+            <div class="feature-card">
+                <h3>🔒 Private</h3>
+                <p>Your data stays secure</p>
+            </div>
+            <div class="feature-card">
+                <h3>📱 Multi-Device</h3>
+                <p>Access from anywhere</p>
+            </div>
+        </div>
+
+        <h2>📋 Quick Setup Steps</h2>
+
+        <div class="step">
+            <h3><span class="step-number">1</span>Create GitHub Token</h3>
+            <ul>
+                <li>Go to: <a href="https://github.com/settings/tokens/new" target="_blank" class="link">https://github.com/settings/tokens/new</a></li>
+                <li>Name: <code>Job Application Tracker</code></li>
+                <li>Expiration: <code>No expiration</code></li>
+                <li>Check only: <code>gist</code> permission ✅</li>
+                <li>Click: <strong>Generate token</strong></li>
+                <li>Copy the token (starts with <code>ghp_...</code>)</li>
+            </ul>
+            <div class="warning">
+                ⚠️ <strong>Important:</strong> Save the token somewhere safe - you won't see it again!
+            </div>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">2</span>Create Secret Gist</h3>
+            <ul>
+                <li>Go to: <a href="https://gist.github.com/" target="_blank" class="link">https://gist.github.com/</a></li>
+                <li>Gist description: <code>Job Application Tracker Data</code></li>
+                <li>Filename: <code>job-applications-data.json</code></li>
+                <li>Content: Just type <code>[]</code></li>
+                <li>Click: <strong>Create secret gist</strong> (NOT public!)</li>
+                <li>Copy the Gist ID from URL (random string after your username)</li>
+            </ul>
+            <div class="code-block">
+URL: https://gist.github.com/username/<span style="color: #10b981;">abc123def456</span>
+                                              ↑ This is your Gist ID
+            </div>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">3</span>Configure Application</h3>
+            <ul>
+                <li>Open <code>github-gist-config.js</code></li>
+                <li>Replace these three values:</li>
+            </ul>
+            <div class="code-block">
+const GITHUB_CONFIG = {
+    GITHUB_TOKEN: '<span style="color: #f59e0b;">ghp_YOUR_TOKEN_HERE</span>',  // ← From Step 1
+    GIST_ID: '<span style="color: #f59e0b;">YOUR_GIST_ID_HERE</span>',         // ← From Step 2
+    USERNAME: '<span style="color: #f59e0b;">your-github-username</span>'      // ← Your username
+};
+
+// Change false to true:
+const SYNC_ENABLED = <span style="color: #10b981;">true</span>;  // ← Enable sync
+            </div>
+            <ul>
+                <li>Save the file</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h3><span class="step-number">4</span>Test It!</h3>
+            <ul>
+                <li>Open <code>index.html</code> in your browser</li>
+                <li>Add a test application</li>
+                <li>Look for sync status message</li>
+                <li>Open on another device - data should sync! 🎉</li>
+            </ul>
+        </div>
+
+        <div class="success">
+            ✅ <strong>That's it!</strong> Your application now automatically syncs across all devices!
+        </div>
+
+        <h2>🔒 Security Tips</h2>
+        <div class="warning">
+            <strong>Never commit your token to public repositories!</strong><br><br>
+            Add to <code>.gitignore</code>:
+            <div class="code-block" style="margin-top: 10px;">
+github-gist-config.js
+            </div>
+        </div>
+
+        <h2>🛠️ Troubleshooting</h2>
+        <ul>
+            <li><strong>401 Error:</strong> Invalid token - create a new one</li>
+            <li><strong>404 Error:</strong> Wrong Gist ID - check the URL again</li>
+            <li><strong>No sync messages:</strong> Make sure <code>SYNC_ENABLED = true</code></li>
+            <li><strong>Still not working:</strong> Press F12 and check Console for errors</li>
+        </ul>
+
+        <h2>📚 Additional Resources</h2>
+        <a href="CLOUD_SYNC_SETUP.md" class="btn">📖 Detailed Documentation</a>
+        <a href="index.html" class="btn">🚀 Open Application</a>
+
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #e5e7eb; text-align: center; color: #6b7280;">
+            <p>Built with ❤️ | Free & Open Source | No Firebase Required!</p>
+        </div>
+    </div>
+</body>
+</html>
