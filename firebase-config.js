@@ -39,6 +39,7 @@ const db = getFirestore(app);
 class FirebaseCloudStorage {
     constructor() {
         this.collectionName = 'job_applications';
+        this.filesCollectionName = 'job_files';
         this.metadataDoc = 'metadata';
         console.log('🔥 Firebase initialized - Cloud storage ready!');
     }
@@ -57,18 +58,49 @@ class FirebaseCloudStorage {
                 version: '2.0'
             });
 
-            // Save each application (serialize files array to avoid nested entity error)
-            const promises = applications.map((app, index) => {
-                // Convert files array to JSON string for Firestore compatibility
+            // Save each application (files stored separately to avoid 1MB field limit)
+            const promises = [];
+            
+            for (let index = 0; index < applications.length; index++) {
+                const app = applications[index];
+                const appId = `app_${index}`;
+                
+                // Save application data without files
                 const appData = {
-                    ...app,
-                    files: app.files ? JSON.stringify(app.files) : '[]',
+                    company: app.company,
+                    position: app.position,
+                    location: app.location,
+                    status: app.status,
+                    dateApplied: app.dateApplied,
+                    salary: app.salary,
+                    jobType: app.jobType,
+                    notes: app.notes,
+                    contactInfo: app.contactInfo,
                     index: index,
-                    updatedAt: new Date().toISOString()
+                    updatedAt: new Date().toISOString(),
+                    hasFiles: app.files && app.files.length > 0
                 };
                 
-                return setDoc(doc(db, this.collectionName, `app_${index}`), appData);
-            });
+                promises.push(setDoc(doc(db, this.collectionName, appId), appData));
+                
+                // Save files separately (each file in its own document)
+                if (app.files && app.files.length > 0) {
+                    for (let fileIndex = 0; fileIndex < app.files.length; fileIndex++) {
+                        const file = app.files[fileIndex];
+                        const fileId = `${appId}_file_${fileIndex}`;
+                        
+                        promises.push(setDoc(doc(db, this.filesCollectionName, fileId), {
+                            appIndex: index,
+                            fileIndex: fileIndex,
+                            name: file.name,
+                            size: file.size,
+                            type: file.type,
+                            data: file.data,
+                            uploadDate: file.uploadDate
+                        }));
+                    }
+                }
+            }
 
             await Promise.all(promises);
             
@@ -88,22 +120,46 @@ class FirebaseCloudStorage {
         try {
             console.log('📥 Loading from Firebase...');
             
-            const querySnapshot = await getDocs(collection(db, this.collectionName));
+            // Load applications
+            const appsSnapshot = await getDocs(collection(db, this.collectionName));
             const applications = [];
             
-            querySnapshot.forEach((document) => {
+            appsSnapshot.forEach((document) => {
                 if (document.id !== this.metadataDoc) {
-                    const data = document.data();
-                    // Deserialize files array back to objects
-                    if (data.files && typeof data.files === 'string') {
-                        data.files = JSON.parse(data.files);
-                    }
-                    applications.push(data);
+                    applications.push(document.data());
                 }
             });
 
             // Sort by index
             applications.sort((a, b) => (a.index || 0) - (b.index || 0));
+            
+            // Load files for each application
+            if (applications.length > 0) {
+                const filesSnapshot = await getDocs(collection(db, this.filesCollectionName));
+                const filesByApp = {};
+                
+                filesSnapshot.forEach((document) => {
+                    const fileData = document.data();
+                    const appIndex = fileData.appIndex;
+                    
+                    if (!filesByApp[appIndex]) {
+                        filesByApp[appIndex] = [];
+                    }
+                    
+                    filesByApp[appIndex].push({
+                        name: fileData.name,
+                        size: fileData.size,
+                        type: fileData.type,
+                        data: fileData.data,
+                        uploadDate: fileData.uploadDate
+                    });
+                });
+                
+                // Attach files to applications
+                applications.forEach(app => {
+                    app.files = filesByApp[app.index] || [];
+                });
+            }
             
             console.log(`✅ Loaded from Firebase: ${applications.length} applications`);
             return applications;
@@ -120,11 +176,18 @@ class FirebaseCloudStorage {
         try {
             console.log('🗑️ Clearing Firebase data...');
             
-            const querySnapshot = await getDocs(collection(db, this.collectionName));
             const promises = [];
             
-            querySnapshot.forEach((document) => {
+            // Clear applications
+            const appsSnapshot = await getDocs(collection(db, this.collectionName));
+            appsSnapshot.forEach((document) => {
                 promises.push(deleteDoc(doc(db, this.collectionName, document.id)));
+            });
+            
+            // Clear files
+            const filesSnapshot = await getDocs(collection(db, this.filesCollectionName));
+            filesSnapshot.forEach((document) => {
+                promises.push(deleteDoc(doc(db, this.filesCollectionName, document.id)));
             });
 
             await Promise.all(promises);
