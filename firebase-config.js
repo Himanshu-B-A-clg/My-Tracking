@@ -57,13 +57,17 @@ class FirebaseCloudStorage {
                 version: '2.0'
             });
 
-            // Save each application
+            // Save each application (serialize files array to avoid nested entity error)
             const promises = applications.map((app, index) => {
-                return setDoc(doc(db, this.collectionName, `app_${index}`), {
+                // Convert files array to JSON string for Firestore compatibility
+                const appData = {
                     ...app,
+                    files: app.files ? JSON.stringify(app.files) : '[]',
                     index: index,
                     updatedAt: new Date().toISOString()
-                });
+                };
+                
+                return setDoc(doc(db, this.collectionName, `app_${index}`), appData);
             });
 
             await Promise.all(promises);
@@ -89,7 +93,12 @@ class FirebaseCloudStorage {
             
             querySnapshot.forEach((document) => {
                 if (document.id !== this.metadataDoc) {
-                    applications.push(document.data());
+                    const data = document.data();
+                    // Deserialize files array back to objects
+                    if (data.files && typeof data.files === 'string') {
+                        data.files = JSON.parse(data.files);
+                    }
+                    applications.push(data);
                 }
             });
 
