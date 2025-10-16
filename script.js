@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     loadApplications();
     updateStats();
+    updateStorageStatus();
     setDefaultDate();
     initializeFileUpload();
 });
@@ -180,16 +181,17 @@ async function saveApplication(event) {
     saveToLocalStorage();
     loadApplications();
     updateStats();
+    updateStorageStatus();
     closeModal();
 }
 
 // Convert file to base64 for storage
 function convertFileToBase64(file) {
     return new Promise((resolve, reject) => {
-        // Check file size (max 5MB)
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        // Check file size (max 2MB for safety due to localStorage limits)
+        const maxSize = 2 * 1024 * 1024; // 2MB
         if (file.size > maxSize) {
-            reject(new Error(`File "${file.name}" is too large. Maximum size is 5MB.`));
+            reject(new Error(`File "${file.name}" is too large. Maximum size is 2MB per file.`));
             return;
         }
         
@@ -726,15 +728,51 @@ function formatStatus(status) {
 
 // Save to localStorage
 function saveToLocalStorage() {
-    localStorage.setItem('applications', JSON.stringify(applications));
-    
-    // Also save to cloud if enabled
-    if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
-        gistStorage.save(applications).then(success => {
-            if (success) {
-                showSyncStatus('Synced to cloud', 'success');
+    try {
+        const dataStr = JSON.stringify(applications);
+        const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
+        
+        // Check if data is approaching localStorage limit (usually ~5-10MB)
+        if (sizeInMB > 4) {
+            showNotification(`Warning: Storage size is ${sizeInMB}MB. Consider reducing file sizes or using fewer files.`, 'warning');
+        }
+        
+        localStorage.setItem('applications', dataStr);
+        console.log(`Data saved: ${applications.length} applications, ${sizeInMB}MB`);
+        
+        // Also save to cloud if enabled
+        if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
+            gistStorage.save(applications).then(success => {
+                if (success) {
+                    showSyncStatus('Synced to cloud', 'success');
+                }
+            }).catch(err => {
+                console.error('Cloud sync failed:', err);
+            });
+        }
+    } catch (error) {
+        if (error.name === 'QuotaExceededError') {
+            showNotification('Storage quota exceeded! Your files are too large. Please remove some files or use smaller file sizes.', 'error');
+            console.error('Storage quota exceeded. Total size:', (new Blob([JSON.stringify(applications)]).size / (1024 * 1024)).toFixed(2), 'MB');
+            
+            // Rollback the last added application if possible
+            if (applications.length > 0) {
+                const lastApp = applications[applications.length - 1];
+                if (confirm('Storage is full! Remove the last application to free space?')) {
+                    applications.pop();
+                    try {
+                        localStorage.setItem('applications', JSON.stringify(applications));
+                        loadApplications();
+                        showNotification('Last application removed. Please try with smaller files.', 'info');
+                    } catch (e) {
+                        console.error('Failed to save after rollback:', e);
+                    }
+                }
             }
-        });
+        } else {
+            showNotification('Failed to save data: ' + error.message, 'error');
+            console.error('Save error:', error);
+        }
     }
 }
 
@@ -748,6 +786,37 @@ function showSyncStatus(message, type) {
         setTimeout(() => {
             statusDiv.style.display = 'none';
         }, 3000);
+    }
+}
+
+// Update storage status display
+function updateStorageStatus() {
+    const statusDiv = document.getElementById('storageStatus');
+    if (!statusDiv) return;
+    
+    try {
+        const dataStr = localStorage.getItem('applications') || '[]';
+        const sizeInMB = (new Blob([dataStr]).size / (1024 / 1024)).toFixed(2);
+        const percentage = (sizeInMB / 5 * 100).toFixed(0); // Assuming 5MB limit
+        
+        let statusClass = 'storage-ok';
+        let icon = 'fa-check-circle';
+        
+        if (sizeInMB >= 4) {
+            statusClass = 'storage-critical';
+            icon = 'fa-exclamation-triangle';
+        } else if (sizeInMB >= 3) {
+            statusClass = 'storage-warning';
+            icon = 'fa-exclamation-circle';
+        }
+        
+        statusDiv.innerHTML = `
+            <i class="fas ${icon}"></i>
+            Storage: ${sizeInMB}MB / ~5MB (${percentage}%)
+        `;
+        statusDiv.className = `storage-status ${statusClass}`;
+    } catch (error) {
+        console.error('Error updating storage status:', error);
     }
 }
 

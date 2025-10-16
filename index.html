@@ -33,7 +33,10 @@
             <div class="header-content">
                 <h1><i class="fas fa-briefcase"></i> Himanshu B A - Job Applications</h1>
                 <p>Managing applications since July 1, 2025</p>
-                <div id="syncStatus" class="sync-status" style="display: none;"></div>
+                <div class="header-status">
+                    <div id="syncStatus" class="sync-status" style="display: none;"></div>
+                    <div id="storageStatus" class="storage-status"></div>
+                </div>
             </div>
         </header>
 
@@ -174,7 +177,7 @@
                         <div class="file-upload-info">
                             <i class="fas fa-cloud-upload-alt"></i>
                             <p>Upload PDF, DOC, DOCX, or TXT files</p>
-                            <small>Maximum file size: 5MB per file</small>
+                            <small>Maximum file size: 2MB per file (localStorage limit)</small>
                         </div>
                         <div id="fileList" class="file-list"></div>
                     </div>

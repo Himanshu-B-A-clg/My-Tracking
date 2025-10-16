@@ -1,0 +1,16 @@
+1. Company name
+2. Date which i have applied 
+3. status ... like 1:Selected 2.rejected 3.reject in rounds
+4. company requirements 
+5. in final give csv,pdf form to export 
+
+
+
+i need in Good professional animinated ui Good interface
+
+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
+
+1. in main page dont show description in view only 
+Company Name	Date Applied	Status	Description	Files	Actions view option give in actions not in Files 
+2. when i delete also one dummy data is repeating clear old data in database
+3. It should load from database not from brower chase
