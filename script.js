@@ -191,6 +191,67 @@ function filterApplications() {
     });
 }
 
+// Export data as JSON for backup
+function exportData() {
+    if (applications.length === 0) {
+        showNotification('No data to backup!', 'warning');
+        return;
+    }
+    
+    const dataStr = JSON.stringify(applications, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `job-applications-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showNotification('Data backed up successfully! Upload this file on other devices.', 'success');
+}
+
+// Import data from JSON file
+function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            if (!Array.isArray(importedData)) {
+                showNotification('Invalid backup file format!', 'error');
+                return;
+            }
+            
+            // Ask user if they want to merge or replace
+            const shouldMerge = confirm('Do you want to MERGE with existing data?\n\nClick OK to merge\nClick Cancel to replace all data');
+            
+            if (shouldMerge) {
+                // Merge data (avoid duplicates by ID)
+                const existingIds = new Set(applications.map(app => app.id));
+                const newApps = importedData.filter(app => !existingIds.has(app.id));
+                applications = [...applications, ...newApps];
+            } else {
+                // Replace all data
+                applications = importedData;
+            }
+            
+            saveToLocalStorage();
+            loadApplications();
+            updateStats();
+            showNotification(`Data restored successfully! ${importedData.length} applications loaded.`, 'success');
+        } catch (error) {
+            showNotification('Error reading backup file!', 'error');
+        }
+    };
+    reader.readAsText(file);
+    
+    // Reset file input
+    event.target.value = '';
+}
+
 // Export to CSV
 function exportToCSV() {
     if (applications.length === 0) {

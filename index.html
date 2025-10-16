@@ -68,6 +68,13 @@
             <button class="btn btn-danger" onclick="exportToPDF()">
                 <i class="fas fa-file-pdf"></i> Export PDF
             </button>
+            <button class="btn btn-warning" onclick="exportData()">
+                <i class="fas fa-download"></i> Backup Data
+            </button>
+            <button class="btn btn-info" onclick="document.getElementById('importFile').click()">
+                <i class="fas fa-upload"></i> Restore Data
+            </button>
+            <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importData(event)">
         </div>
 
         <!-- Search and Filter -->
