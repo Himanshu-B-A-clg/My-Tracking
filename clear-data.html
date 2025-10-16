@@ -157,27 +157,58 @@
         </div>
     </div>
 
+    <script src="indexeddb-storage.js"></script>
     <script>
         // Load and display current count
-        function updateCount() {
-            const apps = JSON.parse(localStorage.getItem('applications')) || [];
-            document.getElementById('recordCount').textContent = apps.length;
+        async function updateCount() {
+            try {
+                // Wait for IndexedDB to initialize
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                if (!idbStorage.db) {
+                    await idbStorage.init();
+                }
+                
+                const apps = await idbStorage.getAll();
+                document.getElementById('recordCount').textContent = apps.length;
+                
+                // Also check localStorage
+                const localApps = JSON.parse(localStorage.getItem('applications') || '[]');
+                if (localApps.length > 0 && apps.length === 0) {
+                    document.getElementById('recordCount').textContent = localApps.length + ' (localStorage)';
+                }
+            } catch (error) {
+                console.error('Error getting count:', error);
+                document.getElementById('recordCount').textContent = '0';
+            }
         }
 
         // Clear all data
-        function clearAllData() {
-            if (confirm('Are you absolutely sure? This cannot be undone!')) {
-                localStorage.removeItem('applications');
-                localStorage.removeItem('jobTrackerBackup');
-                
-                // Show success message
-                document.getElementById('successMsg').classList.add('show');
-                updateCount();
-                
-                // Redirect after 2 seconds
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 2000);
+        async function clearAllData() {
+            if (confirm('Are you absolutely sure? This will delete ALL applications from IndexedDB and localStorage!\n\nThis cannot be undone!')) {
+                try {
+                    // Clear IndexedDB
+                    if (!idbStorage.db) {
+                        await idbStorage.init();
+                    }
+                    await idbStorage.clearAll();
+                    
+                    // Clear localStorage (old data)
+                    localStorage.removeItem('applications');
+                    localStorage.removeItem('jobTrackerBackup');
+                    
+                    // Show success message
+                    document.getElementById('successMsg').classList.add('show');
+                    await updateCount();
+                    
+                    // Redirect after 2 seconds
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 2000);
+                } catch (error) {
+                    alert('Error clearing data: ' + error.message);
+                    console.error('Clear error:', error);
+                }
             }
         }
 

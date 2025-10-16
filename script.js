@@ -1,35 +1,58 @@
 // Application data storage
 let applications = [];
 
-// Load fresh data from localStorage
-function loadFromStorage() {
+// Load fresh data from IndexedDB
+async function loadFromStorage() {
     try {
-        const stored = localStorage.getItem('applications');
-        applications = stored ? JSON.parse(stored) : [];
-        console.log('Loaded applications from storage:', applications.length);
+        // Initialize IndexedDB if not already done
+        if (!idbStorage.db) {
+            await idbStorage.init();
+        }
+        
+        // Try to migrate from localStorage if this is first time
+        const localData = localStorage.getItem('applications');
+        if (localData) {
+            const localApps = JSON.parse(localData);
+            const idbApps = await idbStorage.getAll();
+            
+            // If IndexedDB is empty but localStorage has data, migrate
+            if (idbApps.length === 0 && localApps.length > 0) {
+                console.log('Migrating from localStorage to IndexedDB...');
+                await idbStorage.saveAll(localApps);
+                localStorage.removeItem('applications'); // Clear old storage
+                showNotification(`Migrated ${localApps.length} applications to IndexedDB!`, 'success');
+            }
+        }
+        
+        // Load from IndexedDB
+        applications = await idbStorage.getAll();
+        console.log('Loaded applications from IndexedDB:', applications.length);
     } catch (error) {
         console.error('Error loading from storage:', error);
         applications = [];
+        showNotification('Error loading data. Please refresh the page.', 'error');
     }
 }
 
-// Initialize fresh load
-loadFromStorage();
-
 // Initialize the application
 document.addEventListener('DOMContentLoaded', async function() {
-    // Reload fresh data on page load
-    loadFromStorage();
+    // Show loading indicator
+    showNotification('Loading applications...', 'info');
+    
+    // Load from IndexedDB
+    await loadFromStorage();
     
     // Try to load from cloud first
     if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
         showSyncStatus('Loading from cloud...', 'info');
         const cloudData = await gistStorage.load();
         if (cloudData && cloudData.length > 0) {
-            // Use cloud data if available
-            applications = cloudData;
-            saveToLocalStorage();
-            showSyncStatus('Data loaded from cloud!', 'success');
+            // Use cloud data if available and newer
+            if (cloudData.length >= applications.length) {
+                applications = cloudData;
+                await idbStorage.saveAll(applications);
+                showSyncStatus('Data loaded from cloud!', 'success');
+            }
         }
         // Start auto-sync
         gistStorage.startAutoSync(() => {
@@ -188,10 +211,10 @@ async function saveApplication(event) {
 // Convert file to base64 for storage
 function convertFileToBase64(file) {
     return new Promise((resolve, reject) => {
-        // Check file size (max 2MB for safety due to localStorage limits)
-        const maxSize = 2 * 1024 * 1024; // 2MB
+        // Check file size (max 50MB with IndexedDB)
+        const maxSize = 50 * 1024 * 1024; // 50MB
         if (file.size > maxSize) {
-            reject(new Error(`File "${file.name}" is too large. Maximum size is 2MB per file.`));
+            reject(new Error(`File "${file.name}" is too large. Maximum size is 50MB per file.`));
             return;
         }
         
@@ -727,18 +750,17 @@ function formatStatus(status) {
 }
 
 // Save to localStorage
-function saveToLocalStorage() {
+async function saveToLocalStorage() {
     try {
+        // Save to IndexedDB (supports 1GB+)
+        await idbStorage.saveAll(applications);
+        
         const dataStr = JSON.stringify(applications);
         const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
+        console.log(`Data saved to IndexedDB: ${applications.length} applications, ${sizeInMB}MB`);
         
-        // Check if data is approaching localStorage limit (usually ~5-10MB)
-        if (sizeInMB > 4) {
-            showNotification(`Warning: Storage size is ${sizeInMB}MB. Consider reducing file sizes or using fewer files.`, 'warning');
-        }
-        
-        localStorage.setItem('applications', dataStr);
-        console.log(`Data saved: ${applications.length} applications, ${sizeInMB}MB`);
+        // Update storage display
+        updateStorageStatus();
         
         // Also save to cloud if enabled
         if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
@@ -751,28 +773,8 @@ function saveToLocalStorage() {
             });
         }
     } catch (error) {
-        if (error.name === 'QuotaExceededError') {
-            showNotification('Storage quota exceeded! Your files are too large. Please remove some files or use smaller file sizes.', 'error');
-            console.error('Storage quota exceeded. Total size:', (new Blob([JSON.stringify(applications)]).size / (1024 * 1024)).toFixed(2), 'MB');
-            
-            // Rollback the last added application if possible
-            if (applications.length > 0) {
-                const lastApp = applications[applications.length - 1];
-                if (confirm('Storage is full! Remove the last application to free space?')) {
-                    applications.pop();
-                    try {
-                        localStorage.setItem('applications', JSON.stringify(applications));
-                        loadApplications();
-                        showNotification('Last application removed. Please try with smaller files.', 'info');
-                    } catch (e) {
-                        console.error('Failed to save after rollback:', e);
-                    }
-                }
-            }
-        } else {
-            showNotification('Failed to save data: ' + error.message, 'error');
-            console.error('Save error:', error);
-        }
+        showNotification('Failed to save data: ' + error.message, 'error');
+        console.error('Save error:', error);
     }
 }
 
@@ -790,33 +792,50 @@ function showSyncStatus(message, type) {
 }
 
 // Update storage status display
-function updateStorageStatus() {
+async function updateStorageStatus() {
     const statusDiv = document.getElementById('storageStatus');
     if (!statusDiv) return;
     
     try {
-        const dataStr = localStorage.getItem('applications') || '[]';
-        const sizeInMB = (new Blob([dataStr]).size / (1024 / 1024)).toFixed(2);
-        const percentage = (sizeInMB / 5 * 100).toFixed(0); // Assuming 5MB limit
+        // Get IndexedDB storage estimate
+        const estimate = await idbStorage.getStorageEstimate();
         
-        let statusClass = 'storage-ok';
-        let icon = 'fa-check-circle';
-        
-        if (sizeInMB >= 4) {
-            statusClass = 'storage-critical';
-            icon = 'fa-exclamation-triangle';
-        } else if (sizeInMB >= 3) {
-            statusClass = 'storage-warning';
-            icon = 'fa-exclamation-circle';
+        if (estimate) {
+            const usageMB = parseFloat(estimate.usageMB);
+            const quotaMB = parseFloat(estimate.quotaMB);
+            const percentage = parseFloat(estimate.percentUsed);
+            
+            let statusClass = 'storage-ok';
+            let icon = 'fa-check-circle';
+            
+            if (percentage >= 80) {
+                statusClass = 'storage-critical';
+                icon = 'fa-exclamation-triangle';
+            } else if (percentage >= 60) {
+                statusClass = 'storage-warning';
+                icon = 'fa-exclamation-circle';
+            }
+            
+            statusDiv.innerHTML = `
+                <i class="fas ${icon}"></i>
+                Storage: ${usageMB}MB / ${quotaMB}MB (${percentage}%)
+            `;
+            statusDiv.className = `storage-status ${statusClass}`;
+        } else {
+            // Fallback if storage API not available
+            const dataStr = JSON.stringify(applications);
+            const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
+            
+            statusDiv.innerHTML = `
+                <i class="fas fa-database"></i>
+                Data Size: ${sizeInMB}MB (IndexedDB)
+            `;
+            statusDiv.className = 'storage-status storage-ok';
         }
-        
-        statusDiv.innerHTML = `
-            <i class="fas ${icon}"></i>
-            Storage: ${sizeInMB}MB / ~5MB (${percentage}%)
-        `;
-        statusDiv.className = `storage-status ${statusClass}`;
     } catch (error) {
         console.error('Error updating storage status:', error);
+        statusDiv.innerHTML = `<i class="fas fa-database"></i> IndexedDB Active`;
+        statusDiv.className = 'storage-status storage-ok';
     }
 }
 

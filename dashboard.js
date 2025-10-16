@@ -1,14 +1,31 @@
 // Dashboard Analytics Script
-let applications = JSON.parse(localStorage.getItem('applications')) || [];
+let applications = [];
 
 // Initialize dashboard
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    // Load from IndexedDB
+    await loadFromIndexedDB();
+    
     loadDashboardData();
     displayCurrentDate();
     createCharts();
     displayCompanies();
     updateQuickStats();
 });
+
+// Load data from IndexedDB
+async function loadFromIndexedDB() {
+    try {
+        if (!idbStorage.db) {
+            await idbStorage.init();
+        }
+        applications = await idbStorage.getAll();
+        console.log('Dashboard loaded:', applications.length, 'applications');
+    } catch (error) {
+        console.error('Error loading from IndexedDB:', error);
+        applications = [];
+    }
+}
 
 // Display current date
 function displayCurrentDate() {
