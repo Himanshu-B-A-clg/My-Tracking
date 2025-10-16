@@ -1,36 +1,57 @@
+// Import Firebase storage
+import { firebaseStorage } from './firebase-config.js';
+
 // Application data storage
 let applications = [];
 
-// Load fresh data from IndexedDB
+// Load fresh data from Firebase Cloud
 async function loadFromStorage() {
     try {
-        // Initialize IndexedDB if not already done
-        if (!idbStorage.db) {
-            await idbStorage.init();
+        console.log('📥 Loading from Firebase Cloud...');
+        
+        // Check if Firebase is initialized
+        if (typeof firebaseStorage === 'undefined') {
+            throw new Error('Firebase not initialized. Make sure firebase-config.js is loaded.');
         }
         
-        // Try to migrate from localStorage if this is first time
-        const localData = localStorage.getItem('applications');
-        if (localData) {
-            const localApps = JSON.parse(localData);
-            const idbApps = await idbStorage.getAll();
+        // Try to migrate from IndexedDB/localStorage if this is first time
+        const cloudApps = await firebaseStorage.getAll();
+        
+        if (cloudApps.length === 0) {
+            // Check IndexedDB
+            if (typeof idbStorage !== 'undefined' && idbStorage.db) {
+                const idbApps = await idbStorage.getAll();
+                if (idbApps.length > 0) {
+                    console.log('📤 Migrating from IndexedDB to Firebase...');
+                    await firebaseStorage.saveAll(idbApps);
+                    showNotification(`Migrated ${idbApps.length} applications to Firebase Cloud!`, 'success');
+                    applications = idbApps;
+                    return;
+                }
+            }
             
-            // If IndexedDB is empty but localStorage has data, migrate
-            if (idbApps.length === 0 && localApps.length > 0) {
-                console.log('Migrating from localStorage to IndexedDB...');
-                await idbStorage.saveAll(localApps);
-                localStorage.removeItem('applications'); // Clear old storage
-                showNotification(`Migrated ${localApps.length} applications to IndexedDB!`, 'success');
+            // Check localStorage
+            const localData = localStorage.getItem('applications');
+            if (localData) {
+                const localApps = JSON.parse(localData);
+                if (localApps.length > 0) {
+                    console.log('📤 Migrating from localStorage to Firebase...');
+                    await firebaseStorage.saveAll(localApps);
+                    localStorage.removeItem('applications');
+                    showNotification(`Migrated ${localApps.length} applications to Firebase Cloud!`, 'success');
+                    applications = localApps;
+                    return;
+                }
             }
         }
         
-        // Load from IndexedDB
-        applications = await idbStorage.getAll();
-        console.log('Loaded applications from IndexedDB:', applications.length);
+        // Load from Firebase
+        applications = cloudApps;
+        console.log(`✅ Loaded ${applications.length} applications from Firebase Cloud`);
     } catch (error) {
-        console.error('Error loading from storage:', error);
+        console.error('❌ Error loading from Firebase:', error);
         applications = [];
-        showNotification('Error loading data. Please refresh the page.', 'error');
+        showNotification('Error loading data from cloud: ' + error.message, 'error');
     }
 }
 
@@ -39,51 +60,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Show loading indicator
     showNotification('Loading applications...', 'info');
     
-    // Load from IndexedDB
+    // Load from Firebase Cloud
     await loadFromStorage();
-    
-    // Try to load from cloud first (priority over local data)
-    if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
-        showSyncStatus('Syncing with cloud...', 'info');
-        try {
-            const cloudData = await gistStorage.load();
-            if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
-                // Always prefer cloud data (for cross-device sync)
-                console.log(`Cloud: ${cloudData.length} apps, Local: ${applications.length} apps`);
-                
-                // Use cloud data if it has more or equal applications
-                if (cloudData.length >= applications.length) {
-                    applications = cloudData;
-                    await idbStorage.saveAll(applications);
-                    showSyncStatus(`✓ Loaded ${cloudData.length} apps from cloud`, 'success');
-                } else {
-                    // Local has more, push to cloud
-                    await gistStorage.save(applications);
-                    showSyncStatus(`✓ Uploaded ${applications.length} apps to cloud`, 'success');
-                }
-            } else if (applications.length > 0) {
-                // No cloud data, push local to cloud
-                console.log('No cloud data, uploading local data...');
-                await gistStorage.save(applications);
-                showSyncStatus(`✓ Uploaded ${applications.length} apps to cloud`, 'success');
-            }
-        } catch (error) {
-            console.error('Cloud sync error:', error);
-            showSyncStatus('⚠ Cloud sync unavailable', 'warning');
-        }
-        
-        // Start auto-sync every 30 seconds
-        gistStorage.startAutoSync(async () => {
-            if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
-                try {
-                    await gistStorage.save(applications);
-                    console.log('Auto-synced to cloud');
-                } catch (error) {
-                    console.error('Auto-sync failed:', error);
-                }
-            }
-        });
-    }
     
     loadApplications();
     updateStats();
@@ -772,38 +750,27 @@ function formatStatus(status) {
     return statusMap[status] || status;
 }
 
-// Save to IndexedDB and Cloud
+// Save to Firebase Cloud (NO local storage!)
 async function saveToLocalStorage() {
     try {
-        // Save to IndexedDB (supports 1GB+)
-        await idbStorage.saveAll(applications);
+        showSyncStatus('☁️ Saving to cloud...', 'info');
+        
+        // Save directly to Firebase Cloud
+        await firebaseStorage.saveAll(applications);
         
         const dataStr = JSON.stringify(applications);
         const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
-        console.log(`✓ Saved to IndexedDB: ${applications.length} applications, ${sizeInMB}MB`);
+        console.log(`✅ Saved to Firebase Cloud: ${applications.length} apps, ${sizeInMB}MB`);
         
         // Update storage display
         updateStorageStatus();
         
-        // Immediately sync to cloud if enabled (for cross-device access)
-        if (typeof gistStorage !== 'undefined' && SYNC_ENABLED) {
-            showSyncStatus('Syncing to cloud...', 'info');
-            try {
-                const success = await gistStorage.save(applications);
-                if (success) {
-                    showSyncStatus('✓ Synced to cloud!', 'success');
-                    console.log('✓ Synced to GitHub Gist');
-                } else {
-                    showSyncStatus('⚠ Cloud sync failed', 'warning');
-                }
-            } catch (err) {
-                console.error('Cloud sync failed:', err);
-                showSyncStatus('⚠ Cloud sync error', 'warning');
-            }
-        }
+        showSyncStatus('✓ Saved to cloud!', 'success');
+        
     } catch (error) {
-        showNotification('Failed to save data: ' + error.message, 'error');
-        console.error('Save error:', error);
+        showNotification('Failed to save to cloud: ' + error.message, 'error');
+        showSyncStatus('✗ Save failed', 'error');
+        console.error('Firebase save error:', error);
     }
 }
 
@@ -826,44 +793,32 @@ async function updateStorageStatus() {
     if (!statusDiv) return;
     
     try {
-        // Get IndexedDB storage estimate
-        const estimate = await idbStorage.getStorageEstimate();
+        const dataStr = JSON.stringify(applications);
+        const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
         
-        if (estimate) {
-            const usageMB = parseFloat(estimate.usageMB);
-            const quotaMB = parseFloat(estimate.quotaMB);
-            const percentage = parseFloat(estimate.percentUsed);
-            
-            let statusClass = 'storage-ok';
-            let icon = 'fa-check-circle';
-            
-            if (percentage >= 80) {
-                statusClass = 'storage-critical';
-                icon = 'fa-exclamation-triangle';
-            } else if (percentage >= 60) {
-                statusClass = 'storage-warning';
-                icon = 'fa-exclamation-circle';
-            }
-            
-            statusDiv.innerHTML = `
-                <i class="fas ${icon}"></i>
-                Storage: ${usageMB}MB / ${quotaMB}MB (${percentage}%)
-            `;
-            statusDiv.className = `storage-status ${statusClass}`;
-        } else {
-            // Fallback if storage API not available
-            const dataStr = JSON.stringify(applications);
-            const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
-            
-            statusDiv.innerHTML = `
-                <i class="fas fa-database"></i>
-                Data Size: ${sizeInMB}MB (IndexedDB)
-            `;
-            statusDiv.className = 'storage-status storage-ok';
+        // Firebase free tier: 1GB storage
+        const quotaMB = 1024;
+        const percentage = ((sizeInMB / quotaMB) * 100).toFixed(1);
+        
+        let statusClass = 'storage-ok';
+        let icon = 'fa-cloud';
+        
+        if (percentage >= 80) {
+            statusClass = 'storage-critical';
+            icon = 'fa-exclamation-triangle';
+        } else if (percentage >= 60) {
+            statusClass = 'storage-warning';
+            icon = 'fa-exclamation-circle';
         }
+        
+        statusDiv.innerHTML = `
+            <i class="fas ${icon}"></i>
+            Cloud Storage: ${sizeInMB}MB / ${quotaMB}MB (${percentage}%)
+        `;
+        statusDiv.className = `storage-status ${statusClass}`;
     } catch (error) {
         console.error('Error updating storage status:', error);
-        statusDiv.innerHTML = `<i class="fas fa-database"></i> IndexedDB Active`;
+        statusDiv.innerHTML = `<i class="fas fa-cloud"></i> Firebase Cloud Active`;
         statusDiv.className = 'storage-status storage-ok';
     }
 }

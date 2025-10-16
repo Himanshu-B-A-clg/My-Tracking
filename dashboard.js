@@ -1,10 +1,13 @@
+// Import Firebase storage
+import { firebaseStorage } from './firebase-config.js';
+
 // Dashboard Analytics Script
 let applications = [];
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', async function() {
-    // Load from IndexedDB
-    await loadFromIndexedDB();
+    // Load from Firebase Cloud
+    await loadFromFirebase();
     
     loadDashboardData();
     displayCurrentDate();
@@ -13,16 +16,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateQuickStats();
 });
 
-// Load data from IndexedDB
-async function loadFromIndexedDB() {
+// Load data from Firebase Cloud
+async function loadFromFirebase() {
     try {
-        if (!idbStorage.db) {
-            await idbStorage.init();
-        }
-        applications = await idbStorage.getAll();
-        console.log('Dashboard loaded:', applications.length, 'applications');
+        console.log('📥 Dashboard loading from Firebase...');
+        applications = await firebaseStorage.getAll();
+        console.log(`✅ Dashboard loaded: ${applications.length} applications`);
     } catch (error) {
-        console.error('Error loading from IndexedDB:', error);
+        console.error('❌ Error loading from Firebase:', error);
         applications = [];
     }
 }

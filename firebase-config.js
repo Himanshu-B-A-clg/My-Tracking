@@ -1,77 +1,188 @@
 // Firebase Configuration
-// To use Firebase cloud storage:
+// 🔥 SETUP INSTRUCTIONS:
 // 1. Go to https://console.firebase.google.com/
-// 2. Create a new project
-// 3. Go to Project Settings > General
-// 4. Scroll down to "Your apps" and click the web icon (</>)
-// 5. Copy your Firebase configuration and replace the config below
+// 2. Create a new project (name: Job-Tracker)
+// 3. Enable Firestore Database
+// 4. Go to Project Settings > General
+// 5. Scroll down to "Your apps" and click web icon (</>)
+// 6. Copy your firebaseConfig and REPLACE the values below
 
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyBZ50oDsUPvWIA3uAq9ebHcTYmF0P2Kz24",
+    authDomain: "job-tracker-8c9bc.firebaseapp.com",
+    projectId: "job-tracker-8c9bc",
+    storageBucket: "job-tracker-8c9bc.firebasestorage.app",
+    messagingSenderId: "256467953173",
+    appId: "1:256467953173:web:6ce2bf25314c4334abd01c"
 };
 
-// Uncomment these lines after adding your Firebase config above
-/*
+// Import Firebase modules (v10 - modular SDK)
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { 
+    getFirestore, 
+    collection, 
+    doc, 
+    setDoc, 
+    getDoc,
+    getDocs, 
+    deleteDoc
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
 // Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-// Save to Firebase
-async function saveToFirebase() {
-    try {
-        const userId = getUserId(); // Get or create user ID
-        await db.collection('applications').doc(userId).set({
-            data: applications,
-            lastUpdated: new Date().toISOString()
-        });
-        showNotification('Data synced to cloud!', 'success');
-    } catch (error) {
-        console.error('Firebase save error:', error);
-        showNotification('Failed to sync to cloud', 'error');
+/**
+ * Firebase Cloud Storage Class
+ * Pure cloud storage - no local database needed!
+ */
+class FirebaseCloudStorage {
+    constructor() {
+        this.collectionName = 'job_applications';
+        this.metadataDoc = 'metadata';
+        console.log('🔥 Firebase initialized - Cloud storage ready!');
     }
-}
 
-// Load from Firebase
-async function loadFromFirebase() {
-    try {
-        const userId = getUserId();
-        const doc = await db.collection('applications').doc(userId).get();
-        if (doc.exists) {
-            const cloudData = doc.data();
-            applications = cloudData.data || [];
-            saveToLocalStorage();
-            loadApplications();
-            updateStats();
-            showNotification('Data loaded from cloud!', 'success');
+    /**
+     * Save all applications to Firebase
+     */
+    async saveAll(applications) {
+        try {
+            console.log(`☁️ Uploading ${applications.length} applications to Firebase...`);
+            
+            // Save metadata
+            await setDoc(doc(db, this.collectionName, this.metadataDoc), {
+                count: applications.length,
+                lastUpdated: new Date().toISOString(),
+                version: '2.0'
+            });
+
+            // Save each application
+            const promises = applications.map((app, index) => {
+                return setDoc(doc(db, this.collectionName, `app_${index}`), {
+                    ...app,
+                    index: index,
+                    updatedAt: new Date().toISOString()
+                });
+            });
+
+            await Promise.all(promises);
+            
+            const sizeInMB = (JSON.stringify(applications).length / (1024 * 1024)).toFixed(2);
+            console.log(`✅ Saved to Firebase: ${applications.length} apps (${sizeInMB}MB)`);
+            return true;
+        } catch (error) {
+            console.error('❌ Firebase save error:', error);
+            throw error;
         }
-    } catch (error) {
-        console.error('Firebase load error:', error);
+    }
+
+    /**
+     * Load all applications from Firebase
+     */
+    async getAll() {
+        try {
+            console.log('📥 Loading from Firebase...');
+            
+            const querySnapshot = await getDocs(collection(db, this.collectionName));
+            const applications = [];
+            
+            querySnapshot.forEach((document) => {
+                if (document.id !== this.metadataDoc) {
+                    applications.push(document.data());
+                }
+            });
+
+            // Sort by index
+            applications.sort((a, b) => (a.index || 0) - (b.index || 0));
+            
+            console.log(`✅ Loaded from Firebase: ${applications.length} applications`);
+            return applications;
+        } catch (error) {
+            console.error('❌ Firebase load error:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Clear all data from Firebase
+     */
+    async clearAll() {
+        try {
+            console.log('🗑️ Clearing Firebase data...');
+            
+            const querySnapshot = await getDocs(collection(db, this.collectionName));
+            const promises = [];
+            
+            querySnapshot.forEach((document) => {
+                promises.push(deleteDoc(doc(db, this.collectionName, document.id)));
+            });
+
+            await Promise.all(promises);
+            
+            console.log('✅ Firebase data cleared');
+            return true;
+        } catch (error) {
+            console.error('❌ Firebase clear error:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Initialize - migrate from IndexedDB if needed
+     */
+    async init() {
+        try {
+            // Check if we have cloud data
+            const cloudApps = await this.getAll();
+            
+            // Check if we have local IndexedDB data
+            if (typeof idbStorage !== 'undefined' && idbStorage.db) {
+                const localApps = await idbStorage.getAll();
+                
+                if (localApps.length > 0 && cloudApps.length === 0) {
+                    console.log('📤 Migrating from IndexedDB to Firebase...');
+                    await this.saveAll(localApps);
+                    console.log('✅ Migration complete!');
+                }
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Firebase init error:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Export data as JSON
+     */
+    async exportData() {
+        const applications = await this.getAll();
+        return JSON.stringify(applications, null, 2);
+    }
+
+    /**
+     * Import data from JSON
+     */
+    async importData(jsonData) {
+        try {
+            const applications = JSON.parse(jsonData);
+            await this.saveAll(applications);
+            return true;
+        } catch (error) {
+            console.error('Error importing data:', error);
+            return false;
+        }
     }
 }
 
-// Get or create user ID
-function getUserId() {
-    let userId = localStorage.getItem('userId');
-    if (!userId) {
-        userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        localStorage.setItem('userId', userId);
-    }
-    return userId;
-}
+// Create global instance
+const firebaseStorage = new FirebaseCloudStorage();
 
-// Auto-sync every time data changes
-function saveToLocalStorage() {
-    localStorage.setItem('applications', JSON.stringify(applications));
-    saveToFirebase(); // Auto-sync to cloud
-}
+console.log('🔥 Firebase Cloud Storage ready!');
+console.log('📡 All data stored in the cloud');
+console.log('🌐 Access from ANY device!');
 
-// Load from cloud on page load
-document.addEventListener('DOMContentLoaded', function() {
-    loadFromFirebase();
-});
-*/
+// Export for use in other modules
+export { firebaseStorage };
