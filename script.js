@@ -242,7 +242,8 @@ function convertFileToBase64(file) {
                 name: file.name,
                 type: file.type,
                 size: file.size,
-                data: reader.result
+                data: reader.result,
+                uploadDate: new Date().toISOString()
             });
         };
         reader.onerror = () => reject(new Error(`Failed to read file "${file.name}"`));

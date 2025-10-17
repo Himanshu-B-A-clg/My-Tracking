@@ -122,10 +122,10 @@ class FirebaseCloudStorage {
                         promises.push(setDoc(doc(db, this.filesCollectionName, fileId), {
                             appIndex: index,
                             fileIndex: fileIndex,
-                            name: file.name,
-                            size: file.size,
-                            type: file.type,
-                            uploadDate: file.uploadDate,
+                            name: file.name || 'unknown.file',
+                            size: file.size || 0,
+                            type: file.type || 'application/octet-stream',
+                            uploadDate: file.uploadDate || new Date().toISOString(),
                             totalChunks: chunks.length
                         }));
                         
@@ -200,11 +200,11 @@ class FirebaseCloudStorage {
                         }
                         filesByApp[appIndex].push({
                             docId: docId,
-                            name: fileData.name,
-                            size: fileData.size,
-                            type: fileData.type,
-                            uploadDate: fileData.uploadDate,
-                            totalChunks: fileData.totalChunks
+                            name: fileData.name || 'unknown.file',
+                            size: fileData.size || 0,
+                            type: fileData.type || 'application/octet-stream',
+                            uploadDate: fileData.uploadDate || new Date().toISOString(),
+                            totalChunks: fileData.totalChunks || 0
                         });
                     }
                 });
@@ -220,11 +220,11 @@ class FirebaseCloudStorage {
                             // Reassemble data
                             const data = this.reassembleChunks(chunks.map(c => c.data));
                             return {
-                                name: file.name,
-                                size: file.size,
-                                type: file.type,
+                                name: file.name || 'unknown.file',
+                                size: file.size || 0,
+                                type: file.type || 'application/octet-stream',
                                 data: data,
-                                uploadDate: file.uploadDate
+                                uploadDate: file.uploadDate || new Date().toISOString()
                             };
                         }
                         
