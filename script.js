@@ -19,7 +19,6 @@ function getDescription(app) {
 // Load fresh data from Firebase Cloud
 async function loadFromStorage() {
     try {
-        isLoading = true; // Set flag to prevent saves during load
         console.log('📥 Loading from Firebase Cloud...');
         
         // Check if Firebase is initialized
@@ -65,13 +64,14 @@ async function loadFromStorage() {
         console.error('❌ Error loading from Firebase:', error);
         applications = [];
         showNotification('Error loading data from cloud: ' + error.message, 'error');
-    } finally {
-        isLoading = false; // Clear flag after load completes
     }
+    // Note: isLoading flag is controlled by the initialization function
 }
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', async function() {
+    isLoading = true; // Set at start of initialization
+    
     // Show loading indicator
     showNotification('Loading applications...', 'info');
     
@@ -83,6 +83,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     updateStorageStatus();
     setDefaultDate();
     initializeFileUpload();
+    
+    // Add a grace period after load before allowing saves
+    // This prevents immediate re-upload of just-loaded data
+    setTimeout(() => {
+        isLoading = false; // Now allow saves
+        console.log('✅ App initialized - saves now enabled');
+    }, 3000); // 3 second grace period
 });
 
 // Set default date to today
@@ -781,6 +788,12 @@ async function saveToLocalStorage() {
         return;
     }
     
+    // Don't save if applications array is empty or unchanged
+    if (!applications || applications.length === 0) {
+        console.log('⏸️ Skipping save - no data to save');
+        return;
+    }
+    
     // Debounce saves to prevent overwhelming Firebase
     if (saveTimeout) {
         clearTimeout(saveTimeout);
@@ -789,6 +802,7 @@ async function saveToLocalStorage() {
     saveTimeout = setTimeout(async () => {
         try {
             console.log('☁️ Saving to cloud...');
+            console.trace('Save triggered from:'); // Show where save was called from
             
             // Save directly to Firebase Cloud
             await firebaseStorage.saveAll(applications);
