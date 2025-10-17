@@ -1,7 +1,7 @@
 // Import Firebase storage
 import { firebaseStorage } from './firebase-config.js';
 
-console.log('🚀 Script v3 loaded - Grace period protection enabled');
+console.log('🚀 Script v4 loaded - Enhanced rate limit protection');
 
 // Application data storage
 let applications = [];
@@ -784,13 +784,13 @@ function formatStatus(status) {
 
 // Save to Firebase Cloud (NO local storage!)
 async function saveToLocalStorage() {
-    // Don't save if we're still loading
+    // Don't save if we're still loading (grace period)
     if (isLoading) {
-        console.log('⏸️ Skipping save - data is still loading');
+        console.log('⏸️ Skipping save - grace period active (prevents auto-upload after page load)');
         return;
     }
     
-    // Don't save if applications array is empty or unchanged
+    // Don't save if applications array is empty
     if (!applications || applications.length === 0) {
         console.log('⏸️ Skipping save - no data to save');
         return;
@@ -804,17 +804,18 @@ async function saveToLocalStorage() {
     saveTimeout = setTimeout(async () => {
         try {
             console.log('☁️ Saving to cloud...');
-            console.trace('Save triggered from:'); // Show where save was called from
             
             // Save directly to Firebase Cloud
-            await firebaseStorage.saveAll(applications);
+            const success = await firebaseStorage.saveAll(applications);
             
-            const dataStr = JSON.stringify(applications);
-            const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
-            console.log(`✅ Saved to Firebase Cloud: ${applications.length} apps, ${sizeInMB}MB`);
-            
-            // Update storage display
-            updateStorageStatus();
+            if (success !== false) {
+                const dataStr = JSON.stringify(applications);
+                const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
+                console.log(`✅ Saved to Firebase Cloud: ${applications.length} apps, ${sizeInMB}MB`);
+                
+                // Update storage display
+                updateStorageStatus();
+            }
             
         } catch (error) {
             console.error('Failed to save to cloud:', error);
@@ -822,10 +823,10 @@ async function saveToLocalStorage() {
             if (!error.message.includes('exhausted') && !error.message.includes('400') && !error.message.includes('RESOURCE_EXHAUSTED')) {
                 showNotification('Failed to save to cloud: ' + error.message, 'error');
             } else {
-                console.warn('⚠️ Firebase rate limit hit - will retry later');
+                console.warn('⚠️ Firebase rate limit hit - data saved locally, will retry later');
             }
         }
-    }, 1000); // Wait 1 second before actually saving
+    }, 2000); // Wait 2 seconds before actually saving (increased from 1s)
 }
 
 // Show sync status
