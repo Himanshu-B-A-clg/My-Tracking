@@ -1,7 +1,7 @@
 // Import Firebase storage
 import { firebaseStorage } from './firebase-config.js';
 
-console.log('🚀 Script v5 FINAL - Complete auto-save prevention');
+console.log('🚀 Script v6 NUCLEAR - Manual save ONLY (auto-save DISABLED)');
 
 // Application data storage
 let applications = [];
@@ -255,11 +255,14 @@ async function saveApplication(event) {
         showNotification('Application added successfully!', 'success');
     }
     
-    saveToLocalStorage();
+    // saveToLocalStorage(); // DISABLED - manual save only
     loadApplications();
     updateStats();
     updateStorageStatus();
     closeModal();
+    
+    // Show save reminder
+    console.log('💾 Changes made - Click "Backup Data" to save to cloud');
 }
 
 // Convert file to base64 for storage
@@ -483,8 +486,9 @@ function deleteFile(appIndex, fileIndex) {
     if (confirm('Are you sure you want to delete this file?')) {
         try {
             applications[appIndex].files.splice(fileIndex, 1);
-            saveToLocalStorage();
+            // saveToLocalStorage(); // DISABLED - manual save only
             loadApplications();
+            console.log('💾 File deleted - Click "Backup Data" to save to cloud');
             
             // Close and reopen modal with updated files
             const existingModal = document.querySelector('.modal');
@@ -553,7 +557,8 @@ function editApplication(index) {
 function deleteApplication(index) {
     if (confirm('Are you sure you want to delete this application?')) {
         applications.splice(index, 1);
-        saveToLocalStorage();
+        // saveToLocalStorage(); // DISABLED - manual save only
+        console.log('💾 Application deleted - Click "Backup Data" to save to cloud');
         loadApplications();
         updateStats();
         showNotification('Application deleted successfully!', 'error');
@@ -618,14 +623,27 @@ function filterApplications() {
     });
 }
 
-// Export data as JSON for backup
-function exportData() {
+// Export data as JSON for backup AND save to Firebase Cloud
+async function exportData() {
     if (applications.length === 0) {
         showNotification('No data to backup!', 'warning');
         return;
     }
     
-    // Convert old data format if needed
+    // First, save to Firebase Cloud
+    console.log('☁️ Saving to Firebase Cloud...');
+    try {
+        await firebaseStorage.saveAll(applications);
+        const dataStr = JSON.stringify(applications);
+        const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
+        console.log(`✅ Saved to Firebase Cloud: ${applications.length} apps, ${sizeInMB}MB`);
+        showNotification('✅ Data saved to Firebase Cloud!', 'success');
+    } catch (error) {
+        console.error('Failed to save to Firebase:', error);
+        showNotification('⚠️ Firebase save failed, but creating local backup...', 'warning');
+    }
+    
+    // Also download JSON backup
     const exportData = applications.map(app => ({
         ...app,
         description: getDescription(app) || app.requirements || '',
@@ -642,7 +660,7 @@ function exportData() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showNotification('Data backed up successfully! Upload this file on other devices.', 'success');
+    console.log('💾 JSON backup file downloaded');
 }
 
 // Import data from JSON file
@@ -679,9 +697,10 @@ function importData(event) {
                 applications = normalizedData;
             }
             
-            saveToLocalStorage();
+            // saveToLocalStorage(); // DISABLED - manual save only
             loadApplications();
             updateStats();
+            console.log('💾 Data imported - Click "Backup Data" to save to cloud');
             showNotification(`Data restored successfully! ${importedData.length} applications loaded.`, 'success');
         } catch (error) {
             showNotification('Error reading backup file!', 'error');
