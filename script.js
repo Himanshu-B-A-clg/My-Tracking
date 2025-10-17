@@ -4,6 +4,16 @@ import { firebaseStorage } from './firebase-config.js';
 // Application data storage
 let applications = [];
 
+// Helper function to get company name (handles both old and new field names)
+function getCompanyName(app) {
+    return app.company || getCompanyName(app) || 'Unknown Company';
+}
+
+// Helper function to get description/notes (handles both old and new field names)
+function getDescription(app) {
+    return app.notes || getDescription(app) || '';
+}
+
 // Load fresh data from Firebase Cloud
 async function loadFromStorage() {
     try {
@@ -185,10 +195,17 @@ async function saveApplication(event) {
     
     const application = {
         id: editIndex ? applications[editIndex].id : Date.now(),
-        companyName,
+        company: companyName,
+        companyName: companyName, // Keep for backward compatibility
+        position: '',
+        location: '',
         dateApplied,
         status,
-        description,
+        salary: '',
+        jobType: '',
+        notes: description,
+        description: description, // Keep for backward compatibility
+        contactInfo: '',
         files: uploadedFiles
     };
     
@@ -252,7 +269,7 @@ function loadApplications() {
         row.style.animationDelay = `${index * 0.05}s`;
         
         row.innerHTML = `
-            <td><strong>${app.companyName}</strong></td>
+            <td><strong>${getCompanyName(app)}</strong></td>
             <td>${formatDate(app.dateApplied)}</td>
             <td><span class="status-badge status-${app.status}">${formatStatus(app.status)}</span></td>
             <td>
@@ -314,7 +331,7 @@ function viewApplication(index) {
             <div class="view-details-container">
                 <div class="detail-row">
                     <strong><i class="fas fa-building"></i> Company Name:</strong>
-                    <span>${app.companyName}</span>
+                    <span>${getCompanyName(app)}</span>
                 </div>
                 <div class="detail-row">
                     <strong><i class="fas fa-calendar"></i> Date Applied:</strong>
@@ -326,7 +343,7 @@ function viewApplication(index) {
                 </div>
                 <div class="detail-row">
                     <strong><i class="fas fa-align-left"></i> Description:</strong>
-                    <p class="description-text">${app.description || app.requirements || 'No description provided'}</p>
+                    <p class="description-text">${getDescription(app) || app.requirements || 'No description provided'}</p>
                 </div>
                 <div class="detail-row">
                     <strong><i class="fas fa-paperclip"></i> Attached Files (${app.files ? app.files.length : 0}):</strong>
@@ -384,7 +401,7 @@ function viewFiles(index) {
     modal.innerHTML = `
         <div class="modal-content">
             <div class="modal-header">
-                <h2><i class="fas fa-folder-open"></i> Files - ${app.companyName}</h2>
+                <h2><i class="fas fa-folder-open"></i> Files - ${getCompanyName(app)}</h2>
                 <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
             </div>
             <div class="files-view-container">
@@ -470,10 +487,10 @@ function formatFileSize(bytes) {
 function editApplication(index) {
     const app = applications[index];
     
-    document.getElementById('companyName').value = app.companyName;
+    document.getElementById('companyName').value = getCompanyName(app);
     document.getElementById('dateApplied').value = app.dateApplied;
     document.getElementById('status').value = app.status;
-    document.getElementById('description').value = app.description || app.requirements || '';
+    document.getElementById('description').value = getDescription(app) || app.requirements || '';
     document.getElementById('editIndex').value = index;
     document.getElementById('modalTitle').textContent = 'Edit Application';
     
@@ -574,7 +591,7 @@ function exportData() {
     // Convert old data format if needed
     const exportData = applications.map(app => ({
         ...app,
-        description: app.description || app.requirements || '',
+        description: getDescription(app) || app.requirements || '',
         files: app.files || []
     }));
     
@@ -611,7 +628,7 @@ function importData(event) {
             // Ensure all imported data has proper structure
             const normalizedData = importedData.map(app => ({
                 ...app,
-                description: app.description || app.requirements || '',
+                description: getDescription(app) || app.requirements || '',
                 files: app.files || []
             }));
             
@@ -649,7 +666,7 @@ function exportToCSV() {
     let csv = 'Company Name,Date Applied,Status\n';
     
     applications.forEach(app => {
-        csv += `"${app.companyName}","${formatDate(app.dateApplied)}","${formatStatus(app.status)}"\n`;
+        csv += `"${getCompanyName(app)}","${formatDate(app.dateApplied)}","${formatStatus(app.status)}"\n`;
     });
     
     downloadExportFile(csv, 'job-applications.csv', 'text/csv');
@@ -686,7 +703,7 @@ function exportToPDF() {
     
     // Prepare table data
     const tableData = applications.map(app => [
-        app.companyName,
+        getCompanyName(app),
         formatDate(app.dateApplied),
         formatStatus(app.status)
     ]);
@@ -891,3 +908,4 @@ window.exportToPDF = exportToPDF;
 window.exportData = exportData;
 window.importData = importData;
 window.filterApplications = filterApplications;
+

@@ -4,9 +4,9 @@ echo   Himanshu B A - Job Application Tracker
 echo   Journey Since July 1, 2025
 echo ========================================
 echo.
-echo Opening Dashboard...
+echo Starting Local Web Server (fixes CORS errors)...
 echo.
-start dashboard.html
+powershell -ExecutionPolicy Bypass -File "%~dp0start-server.ps1"
 echo.
 echo Dashboard opened in your default browser!
 echo.

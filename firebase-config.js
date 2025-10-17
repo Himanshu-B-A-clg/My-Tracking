@@ -90,17 +90,18 @@ class FirebaseCloudStorage {
                 const app = applications[index];
                 const appId = `app_${index}`;
                 
-                // Save application data without files
+                // Save application data without files (handle both old and new field names)
                 const appData = {
-                    company: app.company,
-                    position: app.position,
-                    location: app.location,
-                    status: app.status,
-                    dateApplied: app.dateApplied,
-                    salary: app.salary,
-                    jobType: app.jobType,
-                    notes: app.notes,
-                    contactInfo: app.contactInfo,
+                    company: app.company || app.companyName || '',
+                    position: app.position || '',
+                    location: app.location || '',
+                    status: app.status || 'Applied',
+                    dateApplied: app.dateApplied || new Date().toISOString().split('T')[0],
+                    salary: app.salary || '',
+                    jobType: app.jobType || '',
+                    notes: app.notes || app.description || '',
+                    contactInfo: app.contactInfo || '',
+                    id: app.id || Date.now(),
                     index: index,
                     updatedAt: new Date().toISOString(),
                     hasFiles: app.files && app.files.length > 0
