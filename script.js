@@ -3,6 +3,7 @@ import { firebaseStorage } from './firebase-config.js';
 
 // Application data storage
 let applications = [];
+let saveTimeout = null; // Debounce timer for saves
 
 // Helper function to get company name (handles both old and new field names)
 function getCompanyName(app) {
@@ -770,26 +771,35 @@ function formatStatus(status) {
 
 // Save to Firebase Cloud (NO local storage!)
 async function saveToLocalStorage() {
-    try {
-        showSyncStatus('☁️ Saving to cloud...', 'info');
-        
-        // Save directly to Firebase Cloud
-        await firebaseStorage.saveAll(applications);
-        
-        const dataStr = JSON.stringify(applications);
-        const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
-        console.log(`✅ Saved to Firebase Cloud: ${applications.length} apps, ${sizeInMB}MB`);
-        
-        // Update storage display
-        updateStorageStatus();
-        
-        showSyncStatus('✓ Saved to cloud!', 'success');
-        
-    } catch (error) {
-        showNotification('Failed to save to cloud: ' + error.message, 'error');
-        showSyncStatus('✗ Save failed', 'error');
-        console.error('Firebase save error:', error);
+    // Debounce saves to prevent overwhelming Firebase
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
     }
+    
+    saveTimeout = setTimeout(async () => {
+        try {
+            console.log('☁️ Saving to cloud...');
+            
+            // Save directly to Firebase Cloud
+            await firebaseStorage.saveAll(applications);
+            
+            const dataStr = JSON.stringify(applications);
+            const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
+            console.log(`✅ Saved to Firebase Cloud: ${applications.length} apps, ${sizeInMB}MB`);
+            
+            // Update storage display
+            updateStorageStatus();
+            
+        } catch (error) {
+            console.error('Failed to save to cloud:', error);
+            // Only show error notification if it's not a rate limit issue
+            if (!error.message.includes('exhausted') && !error.message.includes('400') && !error.message.includes('RESOURCE_EXHAUSTED')) {
+                showNotification('Failed to save to cloud: ' + error.message, 'error');
+            } else {
+                console.warn('⚠️ Firebase rate limit hit - will retry later');
+            }
+        }
+    }, 1000); // Wait 1 second before actually saving
 }
 
 // Show sync status
