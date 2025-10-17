@@ -1,6 +1,8 @@
 // Import Firebase storage
 import { firebaseStorage } from './firebase-config.js';
 
+console.log('🚀 Script v3 loaded - Grace period protection enabled');
+
 // Application data storage
 let applications = [];
 let saveTimeout = null; // Debounce timer for saves
