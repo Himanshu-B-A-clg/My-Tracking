@@ -212,10 +212,10 @@ async function saveApplication(event) {
 // Convert file to base64 for storage
 function convertFileToBase64(file) {
     return new Promise((resolve, reject) => {
-        // Check file size (max 50MB with IndexedDB)
-        const maxSize = 50 * 1024 * 1024; // 50MB
+        // Check file size (max 5MB with Firebase chunking)
+        const maxSize = 5 * 1024 * 1024; // 5MB
         if (file.size > maxSize) {
-            reject(new Error(`File "${file.name}" is too large. Maximum size is 50MB per file.`));
+            reject(new Error(`File "${file.name}" is too large. Maximum size is 5MB per file.`));
             return;
         }
         

@@ -41,7 +41,32 @@ class FirebaseCloudStorage {
         this.collectionName = 'job_applications';
         this.filesCollectionName = 'job_files';
         this.metadataDoc = 'metadata';
+        this.chunkSize = 800 * 1024; // 800KB chunks (safe under 1MB limit)
         console.log('🔥 Firebase initialized - Cloud storage ready!');
+    }
+    
+    /**
+     * Split large file data into chunks
+     */
+    chunkFileData(fileData) {
+        const chunks = [];
+        const data = fileData.data; // Base64 string
+        const totalChunks = Math.ceil(data.length / this.chunkSize);
+        
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * this.chunkSize;
+            const end = Math.min(start + this.chunkSize, data.length);
+            chunks.push(data.substring(start, end));
+        }
+        
+        return chunks;
+    }
+    
+    /**
+     * Reassemble file chunks
+     */
+    reassembleChunks(chunks) {
+        return chunks.join('');
     }
 
     /**
@@ -83,21 +108,36 @@ class FirebaseCloudStorage {
                 
                 promises.push(setDoc(doc(db, this.collectionName, appId), appData));
                 
-                // Save files separately (each file in its own document)
+                // Save files separately with chunking for large files
                 if (app.files && app.files.length > 0) {
                     for (let fileIndex = 0; fileIndex < app.files.length; fileIndex++) {
                         const file = app.files[fileIndex];
                         const fileId = `${appId}_file_${fileIndex}`;
                         
+                        // Split file data into chunks
+                        const chunks = this.chunkFileData(file);
+                        
+                        // Save file metadata
                         promises.push(setDoc(doc(db, this.filesCollectionName, fileId), {
                             appIndex: index,
                             fileIndex: fileIndex,
                             name: file.name,
                             size: file.size,
                             type: file.type,
-                            data: file.data,
-                            uploadDate: file.uploadDate
+                            uploadDate: file.uploadDate,
+                            totalChunks: chunks.length
                         }));
+                        
+                        // Save each chunk separately
+                        for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+                            const chunkId = `${fileId}_chunk_${chunkIndex}`;
+                            promises.push(setDoc(doc(db, this.filesCollectionName, chunkId), {
+                                appIndex: index,
+                                fileIndex: fileIndex,
+                                chunkIndex: chunkIndex,
+                                data: chunks[chunkIndex]
+                            }));
+                        }
                     }
                 }
             }
@@ -137,23 +177,59 @@ class FirebaseCloudStorage {
             if (applications.length > 0) {
                 const filesSnapshot = await getDocs(collection(db, this.filesCollectionName));
                 const filesByApp = {};
+                const chunksByFile = {};
                 
+                // Organize files and chunks
                 filesSnapshot.forEach((document) => {
+                    const docId = document.id;
                     const fileData = document.data();
-                    const appIndex = fileData.appIndex;
                     
-                    if (!filesByApp[appIndex]) {
-                        filesByApp[appIndex] = [];
+                    if (docId.includes('_chunk_')) {
+                        // This is a chunk
+                        const baseFileId = docId.substring(0, docId.lastIndexOf('_chunk_'));
+                        if (!chunksByFile[baseFileId]) {
+                            chunksByFile[baseFileId] = [];
+                        }
+                        chunksByFile[baseFileId].push(fileData);
+                    } else {
+                        // This is file metadata
+                        const appIndex = fileData.appIndex;
+                        if (!filesByApp[appIndex]) {
+                            filesByApp[appIndex] = [];
+                        }
+                        filesByApp[appIndex].push({
+                            docId: docId,
+                            name: fileData.name,
+                            size: fileData.size,
+                            type: fileData.type,
+                            uploadDate: fileData.uploadDate,
+                            totalChunks: fileData.totalChunks
+                        });
                     }
-                    
-                    filesByApp[appIndex].push({
-                        name: fileData.name,
-                        size: fileData.size,
-                        type: fileData.type,
-                        data: fileData.data,
-                        uploadDate: fileData.uploadDate
-                    });
                 });
+                
+                // Reassemble chunked files
+                for (const appIndex in filesByApp) {
+                    filesByApp[appIndex] = filesByApp[appIndex].map(file => {
+                        const chunks = chunksByFile[file.docId] || [];
+                        
+                        if (chunks.length > 0) {
+                            // Sort chunks by index
+                            chunks.sort((a, b) => a.chunkIndex - b.chunkIndex);
+                            // Reassemble data
+                            const data = this.reassembleChunks(chunks.map(c => c.data));
+                            return {
+                                name: file.name,
+                                size: file.size,
+                                type: file.type,
+                                data: data,
+                                uploadDate: file.uploadDate
+                            };
+                        }
+                        
+                        return file;
+                    });
+                }
                 
                 // Attach files to applications
                 applications.forEach(app => {
