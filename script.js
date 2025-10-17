@@ -1,17 +1,31 @@
 // Import Firebase storage
 import { firebaseStorage } from './firebase-config.js';
 
-console.log('🚀 Script v6 NUCLEAR - Manual save ONLY (auto-save DISABLED)');
+console.log('🚀 Script v7 SMART - Hash-based change detection');
 
 // Application data storage
 let applications = [];
 let saveTimeout = null; // Debounce timer for saves
 let isLoading = false; // Flag to prevent saves during load
 let lastLoadTime = 0; // Track when data was last loaded
+let lastSavedHash = ''; // Hash of last saved data to detect changes
+let isSaving = false; // Prevent duplicate saves
 
 // Helper function to get company name (handles both old and new field names)
 function getCompanyName(app) {
     return app.company || app.companyName || 'Unknown Company';
+}
+
+// Calculate hash of data to detect changes
+function calculateDataHash(data) {
+    const str = JSON.stringify(data);
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString(36);
 }
 
 // Helper function to get description/notes (handles both old and new field names)
@@ -63,7 +77,8 @@ async function loadFromStorage() {
         // Load from Firebase
         applications = cloudApps;
         lastLoadTime = Date.now(); // Record load time
-        console.log(`✅ Loaded ${applications.length} applications from Firebase Cloud`);
+        lastSavedHash = calculateDataHash(applications); // Save hash to detect changes
+        console.log(`✅ Loaded ${applications.length} applications from Firebase Cloud (hash: ${lastSavedHash})`);
     } catch (error) {
         console.error('❌ Error loading from Firebase:', error);
         applications = [];
@@ -630,17 +645,61 @@ async function exportData() {
         return;
     }
     
-    // First, save to Firebase Cloud
-    console.log('☁️ Saving to Firebase Cloud...');
+    // Check if already saving
+    if (isSaving) {
+        console.log('⏸️ Save already in progress, please wait...');
+        showNotification('Save in progress, please wait...', 'warning');
+        return;
+    }
+    
+    // Calculate current data hash
+    const currentHash = calculateDataHash(applications);
+    
+    // Check if data has changed since last save
+    if (currentHash === lastSavedHash) {
+        console.log('ℹ️ No changes detected - skipping Firebase upload');
+        showNotification('✅ No changes to save - data is already backed up!', 'info');
+        
+        // Still download JSON backup if user wants it
+        const exportData = applications.map(app => ({
+            ...app,
+            description: getDescription(app) || app.requirements || '',
+            files: app.files || []
+        }));
+        
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `job-applications-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        console.log('💾 JSON backup file downloaded');
+        return;
+    }
+    
+    // Data has changed - save to Firebase
+    isSaving = true;
+    console.log(`☁️ Saving to Firebase Cloud... (hash changed: ${lastSavedHash} → ${currentHash})`);
+    
     try {
         await firebaseStorage.saveAll(applications);
+        lastSavedHash = currentHash; // Update hash after successful save
+        
         const dataStr = JSON.stringify(applications);
         const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
         console.log(`✅ Saved to Firebase Cloud: ${applications.length} apps, ${sizeInMB}MB`);
         showNotification('✅ Data saved to Firebase Cloud!', 'success');
     } catch (error) {
         console.error('Failed to save to Firebase:', error);
-        showNotification('⚠️ Firebase save failed, but creating local backup...', 'warning');
+        showNotification('⚠️ Firebase save failed: ' + error.message, 'error');
+        isSaving = false;
+        return;
+    } finally {
+        isSaving = false;
     }
     
     // Also download JSON backup
