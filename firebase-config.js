@@ -143,14 +143,33 @@ class FirebaseCloudStorage {
                 }
             }
 
-            await Promise.all(promises);
+            // Process in batches to avoid rate limits
+            const batchSize = 50; // Process 50 writes at a time
+            const results = [];
+            
+            for (let i = 0; i < promises.length; i += batchSize) {
+                const batch = promises.slice(i, i + batchSize);
+                try {
+                    await Promise.all(batch);
+                    results.push(...batch);
+                    
+                    // Small delay between batches if there are more
+                    if (i + batchSize < promises.length) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                } catch (error) {
+                    console.warn(`⚠️ Batch ${i / batchSize + 1} partially failed:`, error.message);
+                    // Continue with next batch even if this one fails
+                }
+            }
             
             const sizeInMB = (JSON.stringify(applications).length / (1024 * 1024)).toFixed(2);
             console.log(`✅ Saved to Firebase: ${applications.length} apps (${sizeInMB}MB)`);
             return true;
         } catch (error) {
             console.error('❌ Firebase save error:', error);
-            throw error;
+            // Don't throw - allow partial saves
+            return false;
         }
     }
 

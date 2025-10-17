@@ -4,6 +4,7 @@ import { firebaseStorage } from './firebase-config.js';
 // Application data storage
 let applications = [];
 let saveTimeout = null; // Debounce timer for saves
+let isLoading = false; // Flag to prevent saves during load
 
 // Helper function to get company name (handles both old and new field names)
 function getCompanyName(app) {
@@ -18,6 +19,7 @@ function getDescription(app) {
 // Load fresh data from Firebase Cloud
 async function loadFromStorage() {
     try {
+        isLoading = true; // Set flag to prevent saves during load
         console.log('📥 Loading from Firebase Cloud...');
         
         // Check if Firebase is initialized
@@ -63,6 +65,8 @@ async function loadFromStorage() {
         console.error('❌ Error loading from Firebase:', error);
         applications = [];
         showNotification('Error loading data from cloud: ' + error.message, 'error');
+    } finally {
+        isLoading = false; // Clear flag after load completes
     }
 }
 
@@ -771,6 +775,12 @@ function formatStatus(status) {
 
 // Save to Firebase Cloud (NO local storage!)
 async function saveToLocalStorage() {
+    // Don't save if we're still loading
+    if (isLoading) {
+        console.log('⏸️ Skipping save - data is still loading');
+        return;
+    }
+    
     // Debounce saves to prevent overwhelming Firebase
     if (saveTimeout) {
         clearTimeout(saveTimeout);
