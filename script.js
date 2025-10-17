@@ -6,12 +6,12 @@ let applications = [];
 
 // Helper function to get company name (handles both old and new field names)
 function getCompanyName(app) {
-    return app.company || getCompanyName(app) || 'Unknown Company';
+    return app.company || app.companyName || 'Unknown Company';
 }
 
 // Helper function to get description/notes (handles both old and new field names)
 function getDescription(app) {
-    return app.notes || getDescription(app) || '';
+    return app.notes || app.description || '';
 }
 
 // Load fresh data from Firebase Cloud
