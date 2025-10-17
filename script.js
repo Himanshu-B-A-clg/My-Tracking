@@ -1,12 +1,13 @@
 // Import Firebase storage
 import { firebaseStorage } from './firebase-config.js';
 
-console.log('🚀 Script v4 loaded - Enhanced rate limit protection');
+console.log('🚀 Script v5 FINAL - Complete auto-save prevention');
 
 // Application data storage
 let applications = [];
 let saveTimeout = null; // Debounce timer for saves
 let isLoading = false; // Flag to prevent saves during load
+let lastLoadTime = 0; // Track when data was last loaded
 
 // Helper function to get company name (handles both old and new field names)
 function getCompanyName(app) {
@@ -61,6 +62,7 @@ async function loadFromStorage() {
         
         // Load from Firebase
         applications = cloudApps;
+        lastLoadTime = Date.now(); // Record load time
         console.log(`✅ Loaded ${applications.length} applications from Firebase Cloud`);
     } catch (error) {
         console.error('❌ Error loading from Firebase:', error);
@@ -74,6 +76,12 @@ async function loadFromStorage() {
 document.addEventListener('DOMContentLoaded', async function() {
     isLoading = true; // Set at start of initialization
     
+    // Clear any pending save operations from previous session
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+        saveTimeout = null;
+    }
+    
     // Show loading indicator
     showNotification('Loading applications...', 'info');
     
@@ -86,12 +94,26 @@ document.addEventListener('DOMContentLoaded', async function() {
     setDefaultDate();
     initializeFileUpload();
     
+    // Clear any save timers that may have been set during initialization
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
+        saveTimeout = null;
+        console.log('🚫 Cleared pending save operations');
+    }
+    
     // Add a grace period after load before allowing saves
     // This prevents immediate re-upload of just-loaded data
     setTimeout(() => {
+        // Final check: clear any lingering save timers
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+            saveTimeout = null;
+            console.log('🚫 Final clear of save timers');
+        }
+        
         isLoading = false; // Now allow saves
         console.log('✅ App initialized - saves now enabled');
-    }, 3000); // 3 second grace period
+    }, 5000); // 5 second grace period (increased from 3s)
 });
 
 // Set default date to today
@@ -787,6 +809,13 @@ async function saveToLocalStorage() {
     // Don't save if we're still loading (grace period)
     if (isLoading) {
         console.log('⏸️ Skipping save - grace period active (prevents auto-upload after page load)');
+        return;
+    }
+    
+    // Don't save within 10 seconds of loading data (extended protection)
+    const timeSinceLoad = Date.now() - lastLoadTime;
+    if (timeSinceLoad < 10000) { // 10 seconds
+        console.log(`⏸️ Skipping save - only ${Math.round(timeSinceLoad/1000)}s since load (waiting 10s)`);
         return;
     }
     
