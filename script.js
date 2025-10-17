@@ -1,7 +1,7 @@
 // Import Firebase storage
 import { firebaseStorage } from './firebase-config.js';
 
-console.log('🚀 Script v7 SMART - Hash-based change detection');
+console.log('🚀 Script v8 AGGRESSIVE - Slower batch uploads to prevent rate limits');
 
 // Application data storage
 let applications = [];
@@ -684,6 +684,7 @@ async function exportData() {
     // Data has changed - save to Firebase
     isSaving = true;
     console.log(`☁️ Saving to Firebase Cloud... (hash changed: ${lastSavedHash} → ${currentHash})`);
+    showNotification('⏳ Saving to Firebase Cloud... This may take 30-60 seconds for 44 apps.', 'info');
     
     try {
         await firebaseStorage.saveAll(applications);
@@ -692,7 +693,7 @@ async function exportData() {
         const dataStr = JSON.stringify(applications);
         const sizeInMB = (new Blob([dataStr]).size / (1024 * 1024)).toFixed(2);
         console.log(`✅ Saved to Firebase Cloud: ${applications.length} apps, ${sizeInMB}MB`);
-        showNotification('✅ Data saved to Firebase Cloud!', 'success');
+        showNotification('✅ Data saved to Firebase Cloud successfully!', 'success');
     } catch (error) {
         console.error('Failed to save to Firebase:', error);
         showNotification('⚠️ Firebase save failed: ' + error.message, 'error');

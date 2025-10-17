@@ -143,22 +143,31 @@ class FirebaseCloudStorage {
                 }
             }
 
-            // Process in batches to avoid rate limits
-            const batchSize = 50; // Process 50 writes at a time
+            // Process in batches to avoid rate limits - AGGRESSIVE strategy
+            const batchSize = 10; // Reduced to 10 writes at a time (was 50)
+            const batchDelay = 500; // Increased to 500ms between batches (was 100ms)
             const results = [];
+            
+            console.log(`📦 Processing ${promises.length} operations in batches of ${batchSize}...`);
             
             for (let i = 0; i < promises.length; i += batchSize) {
                 const batch = promises.slice(i, i + batchSize);
+                const batchNumber = Math.floor(i / batchSize) + 1;
+                const totalBatches = Math.ceil(promises.length / batchSize);
+                
                 try {
+                    console.log(`⏳ Processing batch ${batchNumber}/${totalBatches} (${batch.length} operations)...`);
                     await Promise.all(batch);
                     results.push(...batch);
+                    console.log(`✅ Batch ${batchNumber}/${totalBatches} completed`);
                     
-                    // Small delay between batches if there are more
+                    // Delay between batches if there are more
                     if (i + batchSize < promises.length) {
-                        await new Promise(resolve => setTimeout(resolve, 100));
+                        console.log(`⏸️ Waiting ${batchDelay}ms before next batch...`);
+                        await new Promise(resolve => setTimeout(resolve, batchDelay));
                     }
                 } catch (error) {
-                    console.warn(`⚠️ Batch ${i / batchSize + 1} partially failed:`, error.message);
+                    console.warn(`⚠️ Batch ${batchNumber} partially failed:`, error.message);
                     // Continue with next batch even if this one fails
                 }
             }
